@@ -31,3 +31,7 @@ followups.db-*
 followup-checker.log
 followup-checker-error.log
 followup-checker.pid
+
+# OpenClaw database
+openclaw.db
+openclaw.db-*
