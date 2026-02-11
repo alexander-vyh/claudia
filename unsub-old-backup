@@ -6,8 +6,10 @@
 
 const { execSync } = require('child_process');
 
+const config = require('./lib/config');
+
 const CONFIG = {
-  gmailAccount: 'user@example.com'
+  gmailAccount: config.gmailAccount
 };
 
 /**

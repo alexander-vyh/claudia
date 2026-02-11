@@ -13,14 +13,17 @@ const emailCache = require('./email-cache');
 const followupsDb = require('./followups-db');
 const log = require('./lib/logger')('slack-events');
 
+const path = require('path');
+const config = require('./lib/config');
+
 // Configuration
 const CONFIG = {
-  appToken: 'REDACTED_SLACK_APP_TOKEN',
-  botToken: 'REDACTED_SLACK_BOT_TOKEN',
+  appToken: config.slackAppToken,
+  botToken: config.slackBotToken,
   myUserId: null, // Will be determined on startup
   responseTimeout: 10 * 60 * 1000, // 10 minutes
   checkInterval: 60 * 1000, // Check for timeouts every minute
-  stateFile: process.env.HOME + '/.openclaw/workspace/slack-events-state.json',
+  stateFile: path.join(__dirname, 'slack-events-state.json'),
   reconnectDelay: 3000 // 3 seconds
 };
 
@@ -766,7 +769,7 @@ async function unsubscribeEmailAction(emailId) {
     // Create a temporary script to unsubscribe by email ID
     const scriptPath = '/tmp/unsub-by-id.sh';
     fs.writeFileSync(scriptPath, `#!/bin/bash
-cd ~/.openclaw/workspace
+cd ${__dirname}
 ./unsub "id:${emailId}"
 `);
     execSync(`chmod +x ${scriptPath}`);
