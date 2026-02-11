@@ -6,11 +6,12 @@
 
 const https = require('https');
 const { execSync } = require('child_process');
+const config = require('./lib/config');
 
 const CONFIG = {
-  slackToken: 'REDACTED_SLACK_BOT_TOKEN',
-  mySlackUserId: 'REDACTED_SLACK_USER_ID',
-  gmailAccount: 'user@example.com'
+  slackToken: config.slackBotToken,
+  mySlackUserId: config.slackUserId,
+  gmailAccount: config.gmailAccount
 };
 
 /**

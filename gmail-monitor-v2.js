@@ -7,14 +7,16 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
+const path = require('path');
+const config = require('./lib/config');
 
 // Configuration
 const CONFIG = {
-  gmailAccount: 'user@example.com',
-  slackToken: 'REDACTED_SLACK_BOT_TOKEN',
-  slackUserId: 'U05KZQZQZQZ', // TODO: Get your Slack user ID
+  gmailAccount: config.gmailAccount,
+  slackToken: config.slackBotToken,
+  slackUserId: config.slackUserId,
   checkInterval: 5 * 60 * 1000, // 5 minutes
-  historyFile: process.env.HOME + '/.openclaw/workspace/gmail-last-check.txt'
+  historyFile: path.join(__dirname, 'gmail-last-check.txt')
 };
 
 // VIP senders (will notify immediately)

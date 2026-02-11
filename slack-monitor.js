@@ -6,14 +6,16 @@
 
 const https = require('https');
 const fs = require('fs');
+const path = require('path');
+const config = require('./lib/config');
 
 // Configuration
 const CONFIG = {
-  slackToken: 'REDACTED_SLACK_BOT_TOKEN',
-  myUsername: 'redacted.username', // Your Slack username
+  slackToken: config.slackBotToken,
+  myUsername: config.slackUsername,
   checkInterval: 2 * 60 * 1000, // Check every 2 minutes
   responseTimeout: 10 * 60 * 1000, // 10 minutes in milliseconds
-  stateFile: process.env.HOME + '/.openclaw/workspace/slack-monitor-state.json'
+  stateFile: path.join(__dirname, 'slack-monitor-state.json')
 };
 
 // Tracked messages awaiting response

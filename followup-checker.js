@@ -8,10 +8,12 @@ const https = require('https');
 const followupsDb = require('./followups-db');
 const log = require('./lib/logger')('followup-checker');
 
+const config = require('./lib/config');
+
 // Configuration
 const CONFIG = {
-  slackToken: 'REDACTED_SLACK_BOT_TOKEN',
-  mySlackUserId: 'REDACTED_SLACK_USER_ID',
+  slackToken: config.slackBotToken,
+  mySlackUserId: config.slackUserId,
   checkInterval: 15 * 60 * 1000, // Check every 15 minutes
 
   // Notification thresholds (in seconds)

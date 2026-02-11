@@ -13,10 +13,12 @@ const https = require('https');
 const app = express();
 const PORT = 3030;
 
+const config = require('./lib/config');
+
 const CONFIG = {
-  slackSigningSecret: 'REDACTED_SIGNING_SECRET',
-  slackToken: 'REDACTED_SLACK_BOT_TOKEN',
-  gmailAccount: 'user@example.com'
+  slackSigningSecret: config.slackSigningSecret,
+  slackToken: config.slackBotToken,
+  gmailAccount: config.gmailAccount
 };
 
 // Raw body parser for signature verification
@@ -202,7 +204,7 @@ async function handleAction(action, user, channel) {
       case 'unsubscribe':
         // Run automated unsubscribe
         try {
-          execSync(`cd ~/.openclaw/workspace && ./unsub-email-id "${emailId}"`, { stdio: 'pipe' });
+          execSync(`cd ${__dirname} && ./unsub-email-id "${emailId}"`, { stdio: 'pipe' });
           return { text: '✓ Unsubscribed automatically' };
         } catch (error) {
           return { text: '✗ Unsubscribe failed' };

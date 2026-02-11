@@ -7,21 +7,23 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
+const path = require('path');
 const emailCache = require('./email-cache');
 const followupsDb = require('./followups-db');
 const log = require('./lib/logger')('gmail-monitor');
+const config = require('./lib/config');
 
 // Configuration
 const CONFIG = {
-  gmailAccount: 'user@example.com',
-  slackToken: 'REDACTED_SLACK_BOT_TOKEN',
-  mySlackUserId: 'REDACTED_SLACK_USER_ID', // Alexander Vyhmeister's user ID
+  gmailAccount: config.gmailAccount,
+  slackToken: config.slackBotToken,
+  mySlackUserId: config.slackUserId,
   checkInterval: 5 * 60 * 1000, // 5 minutes
   batchTimes: [9, 12, 15, 18], // Hours to send batched summaries (9am, 12pm, 3pm, 6pm)
   healthCheckHour: 8, // Daily health summary at 8 AM
-  historyFile: process.env.HOME + '/.openclaw/workspace/gmail-last-check.txt',
-  batchQueueFile: process.env.HOME + '/.openclaw/workspace/gmail-batch-queue.json',
-  heartbeatFile: process.env.HOME + '/.openclaw/workspace/gmail-heartbeat.json'
+  historyFile: path.join(__dirname, 'gmail-last-check.txt'),
+  batchQueueFile: path.join(__dirname, 'gmail-batch-queue.json'),
+  heartbeatFile: path.join(__dirname, 'gmail-heartbeat.json')
 };
 
 // Batch queue for non-urgent emails
@@ -55,69 +57,8 @@ let followupsDbConn = null;
 // Sent-mail detection: use wider window on first run to cover restart gaps
 let sentMailFirstRun = true;
 
-// VIP senders - C-levels and VPs at simpli.fi (from executives.csv)
-const VIPS = [
-  // Test
-  'personal@example.com', // Personal email for testing
-
-  // C-Level
-  'ceo@example.com', // CEO
-  'cfo@example.com', // CFO
-  'cmo@example.com', // CMO
-  'cco@example.com', // Chief Customer Officer
-  'cpto@example.com', // Chief Product & Technology Officer
-  'cro@example.com', // Chief Revenue Officer
-
-  // Senior VPs & VPs
-  'vp1@example.com', // SVP New Acquisition Sales
-  'vp2@example.com', // VP Campaign Implementation
-  'vp3@example.com', // RVP Growth & Strategy
-  'vp4@example.com', // VP Product Management
-  'vp5@example.com', // VP People Operations
-  'vp6@example.com', // VP Revenue Operations
-  'vp7@example.com', // VP Inventory
-  'vp8@example.com', // VP Supply Ops
-  'vp9@example.com', // RVP Growth & Strategy
-  'vp10@example.com', // SVP Engineering
-  'vp11@example.com', // RVP Growth & Strategy
-  'vp12@example.com', // VP Brand & Agency Partnerships
-  'vp13@example.com', // VP AdOps Omni
-  'vp14@example.com', // VP Client Success - Software
-  'vp15@example.com', // VP Programmatic Traders
-  'vp16@example.com', // SVP Strategic Partnerships
-  'vp17@example.com', // VP Brand & Communications
-  'vp18@example.com', // VP Financial Planning & Analysis
-  'vp19@example.com', // RVP Growth & Strategy
-  'vp20@example.com', // SVP Growth & Strategy
-  'vp21@example.com', // SVP General Manager
-  'vp22@example.com', // VP Client Success
-  'vp23@example.com', // VP Client Success
-  'vp24@example.com', // VP Head of Legal
-  'vp25@example.com', // SVP Ad Operations
-  'vp26@example.com', // VP Infrastructure Operations
-  'vp27@example.com', // VP Finance
-  'vp28@example.com', // VP AI Implementation
-  'vp29@example.com', // VP Growth Marketing
-  'vp30@example.com', // VP CS Operations
-  'vp31@example.com', // RVP Growth & Strategy
-
-  // C-Level Direct Reports
-  'dir1@example.com', // Division Sales Manager
-  'dir2@example.com', // Design Manager
-  'dir3@example.com', // Regional Sales Manager
-  'dir4@example.com', // General Sales Manager
-  'dir5@example.com', // Director of Facilities
-  'dir6@example.com', // Executive Creative Director
-  'dir7@example.com', // Executive Project Manager
-  'dir8@example.com', // Specialist, Social Media and Events
-  'dir9@example.com', // Sales Development Director
-  'dir10@example.com', // Product Specialist
-  'dir11@example.com', // Head of Political Sales
-  'dir12@example.com', // Regional Sales Manager
-  'dir13@example.com', // Regional Sales Manager
-  'dir14@example.com', // Regional Manager
-  'dir15@example.com' // Director of Client Success - Political
-];
+// VIP senders (loaded from ~/.config/claudia/team.json)
+const VIPS = config.vipEmails;
 
 // VIP title patterns (case-insensitive)
 const VIP_TITLES = ['ceo', 'cto', 'cfo', 'coo', 'cmo', 'ciso', 'cpo', 'vp', 'vice president', 'president'];
@@ -320,7 +261,7 @@ async function getMySlackUserId() {
           const data = JSON.parse(body);
           // For bot tokens, we need to find the actual user
           // Let's use the team to send to ourselves
-          CONFIG.mySlackUserId = data.user_id || '@redacted.username';
+          CONFIG.mySlackUserId = data.user_id || '@' + config.slackUsername;
           resolve(CONFIG.mySlackUserId);
         } catch (e) {
           reject(e);
@@ -413,7 +354,7 @@ function applyRuleBasedFilter(email) {
   }
 
   // Auto-archive rules (noise, but keep in archive)
-  if (from.includes("' via it") && !from.includes('@example.com">')) {
+  if (from.includes("' via it") && !from.includes('@' + config.filterPatterns.companyDomain)) {
     return { action: 'archive', reason: 'Kantata via IT notification' };
   }
 
@@ -451,7 +392,7 @@ function applyRuleBasedFilter(email) {
   }
 
   // Archive automated offboarding/onboarding emails from Digital Workplace systems
-  if (from.includes('group@example.com') &&
+  if (from.includes(config.filterPatterns.dwGroupEmail) &&
       (subject.includes('offboarding') || subject.includes('onboarding'))) {
     return { action: 'archive', reason: 'Automated onboarding/offboarding notification' };
   }
@@ -495,7 +436,7 @@ function applyRuleBasedFilter(email) {
   }
 
   // Archive CISA bulletins (via infosec list)
-  if (from.includes('infosec@example.com') && from.includes('cisa')) {
+  if (from.includes('infosec@' + config.filterPatterns.companyDomain) && from.includes('cisa')) {
     return { action: 'archive', reason: 'CISA bulletin' };
   }
 
@@ -514,7 +455,7 @@ function applyRuleBasedFilter(email) {
     return { action: 'delete', reason: 'External marketing' };
   }
 
-  if (subject.match(/webcast|webinar|newsletter/i) && !from.includes('@example.com')) {
+  if (subject.match(/webcast|webinar|newsletter/i) && !from.includes('@' + config.filterPatterns.companyDomain)) {
     return { action: 'delete', reason: 'Marketing content' };
   }
 
@@ -537,7 +478,7 @@ function applyRuleBasedFilter(email) {
   if (from.includes('tropicapp.io')) {
     return { action: 'delete', reason: 'Tropic marketing' };
   }
-  if (from.includes('commvault.com') && !from.includes('@example.com')) {
+  if (from.includes('commvault.com') && !from.includes('@' + config.filterPatterns.companyDomain)) {
     return { action: 'delete', reason: 'Commvault marketing' };
   }
   if (from.includes('stoneflymail')) {

@@ -9,6 +9,7 @@ package-lock.json
 # State files
 gmail-last-check.txt
 gmail-batch-queue.json
+gmail-heartbeat.json
 slack-events-state.json
 slack-monitor-state.json
 
@@ -16,7 +17,7 @@ slack-monitor-state.json
 email-cache/
 .cache/
 
-# Credentials (should be in parent .openclaw dir)
+# Credentials (should be in ~/.config/claudia/)
 *-credentials.json
 *-token.json
 
@@ -26,10 +27,9 @@ email-cache/
 .DS_Store
 
 # Follow-ups database
+follow-ups.db
 followups.db
 followups.db-*
-followup-checker.log
-followup-checker-error.log
 followup-checker.pid
 
 # OpenClaw database
@@ -42,6 +42,13 @@ openclaw.db-*
 # Meeting alerts
 meeting-cache.json
 alert-state.json
-meeting-alerts.log
-meeting-alerts-error.log
 meeting-alerts.pid
+
+# Serena
+.serena/
+
+# Claude Code
+.claude/
+
+# Plan files (contain sensitive data)
+PLAN.md
