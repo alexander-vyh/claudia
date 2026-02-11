@@ -185,7 +185,7 @@ const { execSync } = require('child_process');
 
 const CREDENTIALS_PATH = process.env.HOME + '/.openclaw/gmail-credentials.json';
 const TOKEN_PATH = process.env.HOME + '/.openclaw/gmail-token.json';
-const GMAIL_ACCOUNT = 'user@example.com';
+const GMAIL_ACCOUNT = config.gmailAccount;  // see ~/.config/claudia/secrets.json
 ```
 
 New:
@@ -199,7 +199,7 @@ const { execSync } = require('child_process');
 
 const CREDENTIALS_PATH = process.env.HOME + '/.openclaw/gmail-credentials.json';
 const TOKEN_PATH = process.env.HOME + '/.openclaw/gmail-token.json';
-const GMAIL_ACCOUNT = 'user@example.com';
+const GMAIL_ACCOUNT = config.gmailAccount;  // see ~/.config/claudia/secrets.json
 
 // Parse --correlation-id from args (passed by gmail-monitor)
 const correlationArg = process.argv.find(a => a.startsWith('--correlation-id='));

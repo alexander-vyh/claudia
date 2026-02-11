@@ -8,14 +8,7 @@ Integrated into `meeting-alert-monitor.js` — no new daemon.
 
 ## Direct Reports
 
-| Name | Email | Slack ID |
-|---|---|---|
-| Report One | report1@example.com | REDACTED_REPORT1_SLACK_ID |
-| Report Two | report2@example.com | REDACTED_REPORT2_SLACK_ID |
-| Report Three | report3@example.com | REDACTED_REPORT3_SLACK_ID |
-| Report Four | report4@example.com | REDACTED_REPORT4_SLACK_ID |
-| Report Five | report5@example.com | REDACTED_REPORT5_SLACK_ID |
-| Report Six | report6@example.com | REDACTED_REPORT6_SLACK_ID |
+(see ~/.config/claudia/team.json)
 
 ## O3 Detection
 

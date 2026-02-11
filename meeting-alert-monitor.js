@@ -36,16 +36,11 @@ const SOUNDS = {
   start: '/System/Library/Sounds/Hero.aiff'
 };
 
+const config = require('./lib/config');
+
 const O3_CONFIG = {
-  myEmail: 'user@example.com',
-  directReports: [
-    { name: 'Report One', email: 'report1@example.com', slackId: 'REDACTED_REPORT1_SLACK_ID' },
-    { name: 'Report Two', email: 'report2@example.com', slackId: 'REDACTED_REPORT2_SLACK_ID' },
-    { name: 'Report Three', email: 'report3@example.com', slackId: 'REDACTED_REPORT3_SLACK_ID' },
-    { name: 'Report Four', email: 'report4@example.com', slackId: 'REDACTED_REPORT4_SLACK_ID' },
-    { name: 'Report Five', email: 'report5@example.com', slackId: 'REDACTED_REPORT5_SLACK_ID' },
-    { name: 'Report Six', email: 'report6@example.com', slackId: 'REDACTED_REPORT6_SLACK_ID' }
-  ],
+  myEmail: config.gmailAccount,
+  directReports: config.directReports,
   afternoonPrepWindow: { startHour: 14, endHour: 15 },  // 2-3pm
   minGapMinutes: 10,
   maxPostDeferHours: 4,

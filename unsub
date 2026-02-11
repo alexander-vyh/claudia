@@ -11,9 +11,10 @@ const http = require('http');
 const { URL } = require('url');
 const { execSync } = require('child_process');
 
+const config = require('./lib/config');
 const CREDENTIALS_PATH = process.env.HOME + '/.openclaw/gmail-credentials.json';
 const TOKEN_PATH = process.env.HOME + '/.openclaw/gmail-token.json';
-const GMAIL_ACCOUNT = 'user@example.com';
+const GMAIL_ACCOUNT = config.gmailAccount;
 
 // Parse --correlation-id from args (passed by gmail-monitor)
 const correlationArg = process.argv.find(a => a.startsWith('--correlation-id='));

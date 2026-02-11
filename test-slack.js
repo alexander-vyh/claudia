@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 const https = require('https');
+const config = require('./lib/config');
 
 const CONFIG = {
-  slackToken: 'REDACTED_SLACK_BOT_TOKEN'
+  slackToken: config.slackBotToken
 };
 
 function sendSlackMessage(channel, message) {
@@ -54,6 +55,6 @@ function sendSlackMessage(channel, message) {
 }
 
 // Test with a message that might have special characters
-sendSlackMessage('@redacted.username', '🔔 Test notification with émoji and spécial characters')
+sendSlackMessage('@' + config.slackUsername, '🔔 Test notification with émoji and spécial characters')
   .then(() => console.log('✓ SUCCESS'))
   .catch(err => console.error('✗ FAILED:', err.message));

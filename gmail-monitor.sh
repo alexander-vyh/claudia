@@ -4,7 +4,8 @@
 
 set -euo pipefail
 
-GMAIL_ACCOUNT="user@example.com"
+CONFIG_DIR="$HOME/.config/claudia"
+GMAIL_ACCOUNT=$(jq -r '.gmailAccount' "$CONFIG_DIR/secrets.json")
 SLACK_WEBHOOK_URL="" # TODO: Get from Slack
 CHECK_INTERVAL=300 # 5 minutes in seconds
 HISTORY_FILE="$HOME/.openclaw/workspace/gmail-history-id.txt"
