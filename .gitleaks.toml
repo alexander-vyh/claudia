@@ -1,0 +1,22 @@
+[extend]
+# Use gitleaks built-in rules (Slack tokens, AWS keys, etc.)
+useDefault = true
+
+# Project-specific rules
+[[rules]]
+id = "simpli-fi-email"
+description = "Company email domain"
+regex = '''@simpli\.fi'''
+keywords = ["simpli.fi"]
+
+[[rules]]
+id = "known-slack-user-ids"
+description = "Known Slack user IDs (personal or direct reports)"
+regex = '''U03QTC30FAR|U08HWQZRCR4|U0412G376E9|U0A0UJ35KE2|ULPLLCRQF|U070SD8QX39|UJNCSLVTK'''
+
+[allowlist]
+# Example config files use placeholder tokens like xoxb-your-bot-token
+paths = [
+  '''config/secrets\.example\.json''',
+  '''config/team\.example\.json''',
+]
