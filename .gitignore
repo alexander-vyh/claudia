@@ -56,3 +56,6 @@ meeting-alerts.pid
 
 # Plan files (contain sensitive data)
 PLAN.md
+
+# direnv
+.envrc
