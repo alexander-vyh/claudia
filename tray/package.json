@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node test-service-manager.js",
     "build": "electron-builder --mac --dir",
     "dist": "electron-builder --mac"
   },

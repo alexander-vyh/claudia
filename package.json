@@ -16,6 +16,7 @@
     "husky": "^9.1.7"
   },
   "scripts": {
+    "test": "npm test --prefix tray",
     "prepare": "husky"
   }
 }
