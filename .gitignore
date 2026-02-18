@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 package-lock.json
+!tray/package-lock.json
 
 # Logs
 *.log
@@ -36,6 +37,9 @@ followup-checker.pid
 openclaw.db
 openclaw.db-*
 
+# Tray app build output
+tray/dist/
+
 # Git worktrees
 .worktrees/
 
@@ -52,3 +56,6 @@ meeting-alerts.pid
 
 # Plan files (contain sensitive data)
 PLAN.md
+
+# direnv
+.envrc
