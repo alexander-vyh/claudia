@@ -404,4 +404,472 @@ assert.ok(notifConv.notified_at);
 console.log('PASS: markNotified');
 
 console.log('\n--- Task 6 O3 + notification tests passed ---');
+
+// ============================================================================
+// BEHAVIORAL CONTRACT TESTS
+// These test the invariants that services actually rely on.
+// ============================================================================
+
+// --- Test: Previously untested exports ---
+
+// ALLOWED_RULE_TYPES constant
+assert.deepStrictEqual(claudiaDb.ALLOWED_RULE_TYPES, ['archive', 'alert', 'demote', 'flag']);
+console.log('PASS: ALLOWED_RULE_TYPES constant');
+
+// RELATIONSHIPS constant
+assert.ok(claudiaDb.RELATIONSHIPS.belongs_to);
+assert.ok(claudiaDb.RELATIONSHIPS.triggered);
+assert.ok(claudiaDb.RELATIONSHIPS.replied_to);
+assert.ok(claudiaDb.RELATIONSHIPS.follow_up_for);
+assert.ok(claudiaDb.RELATIONSHIPS.unsubscribed_from);
+assert.ok(claudiaDb.RELATIONSHIPS.mentioned_in);
+console.log('PASS: RELATIONSHIPS constant');
+
+// ENTITY_TYPES constant
+assert.ok(claudiaDb.ENTITY_TYPES.email);
+assert.ok(claudiaDb.ENTITY_TYPES.conversation);
+assert.ok(claudiaDb.ENTITY_TYPES.o3_session);
+console.log('PASS: ENTITY_TYPES constant');
+
+console.log('\n--- Constants tests passed ---');
+
+// --- Test: getO3SessionsForReport ---
+// Add a second O3 session for the same report
+const o3Start2 = o3Start + 86400; // 1 day later
+claudiaDb.upsertO3Session(db, acct.id, {
+  id: 'cal-event-2',
+  report_name: 'Jane Smith',
+  report_email: 'jane@example.com',
+  scheduled_start: o3Start2,
+  scheduled_end: o3Start2 + 1800,
+  created_at: o3Start2 - 3600
+});
+
+const sessions = claudiaDb.getO3SessionsForReport(db, 'jane@example.com');
+assert.strictEqual(sessions.length, 2);
+// Should be DESC order -- newest first
+assert.strictEqual(sessions[0].id, 'cal-event-2');
+assert.strictEqual(sessions[1].id, 'cal-event-1');
+console.log('PASS: getO3SessionsForReport (multiple, DESC order)');
+
+// --- Test: getWeeklyO3Summary ---
+// Both sessions fall within a week-sized window
+const weekStart = o3Start - 3600;
+const weekEnd = o3Start2 + 86400;
+const weekly = claudiaDb.getWeeklyO3Summary(db, weekStart, weekEnd);
+assert.strictEqual(weekly.length, 2);
+// Should be ASC order -- earliest first
+assert.strictEqual(weekly[0].id, 'cal-event-1');
+assert.strictEqual(weekly[1].id, 'cal-event-2');
+console.log('PASS: getWeeklyO3Summary (ASC order, range boundaries)');
+
+// Boundary: query range that excludes both sessions
+const emptyWeek = claudiaDb.getWeeklyO3Summary(db, o3Start2 + 86400, o3Start2 + 172800);
+assert.strictEqual(emptyWeek.length, 0);
+console.log('PASS: getWeeklyO3Summary (empty range)');
+
+// --- Test: markO3LatticeLogged ---
+claudiaDb.markO3LatticeLogged(db, 'cal-event-2');
+const logged = claudiaDb.getO3Session(db, 'cal-event-2');
+assert.strictEqual(logged.lattice_logged, 1);
+console.log('PASS: markO3LatticeLogged');
+
+// --- Test: markO3Notified with all valid fields ---
+claudiaDb.markO3Notified(db, 'cal-event-2', 'prep_sent_before');
+const notified2 = claudiaDb.getO3Session(db, 'cal-event-2');
+assert.strictEqual(notified2.prep_sent_before, 1);
+console.log('PASS: markO3Notified (prep_sent_before)');
+
+claudiaDb.markO3Notified(db, 'cal-event-2', 'post_nudge_sent');
+const notified3 = claudiaDb.getO3Session(db, 'cal-event-2');
+assert.strictEqual(notified3.post_nudge_sent, 1);
+console.log('PASS: markO3Notified (post_nudge_sent)');
+
+// --- Test: markO3Notified with invalid field throws ---
+assert.throws(() => {
+  claudiaDb.markO3Notified(db, 'cal-event-2', 'evil_field; DROP TABLE o3_sessions;--');
+}, /Invalid O3 notification field/);
+console.log('PASS: markO3Notified rejects invalid field');
+
+console.log('\n--- Previously untested functions passed ---');
+
+// --- Test: Multi-Account Isolation ---
+const acctB = claudiaDb.upsertAccount(db, {
+  email: 'personal@example.com',
+  provider: 'gmail',
+  display_name: 'Personal',
+  is_primary: 0
+});
+assert.notStrictEqual(acctB.id, acct.id);
+
+// Create data scoped to account B
+claudiaDb.trackConversation(db, acctB.id, {
+  id: 'personal:conv-1',
+  type: 'email',
+  subject: 'Personal Thread',
+  from_user: 'friend@example.com',
+  from_name: 'Friend',
+  last_sender: 'them',
+  waiting_for: 'my-response'
+});
+
+claudiaDb.upsertEmail(db, acctB.id, {
+  gmail_id: 'personal-gmail-001',
+  thread_id: 'personal-thread-1',
+  from_addr: 'friend@example.com',
+  subject: 'Personal email',
+  date: Math.floor(Date.now() / 1000),
+  direction: 'inbound'
+});
+
+claudiaDb.recordUnsubscribe(db, acctB.id, {
+  sender_domain: 'spam-personal.com',
+  method: 'list-unsubscribe-post'
+});
+
+claudiaDb.createRule(db, acctB.id, {
+  rule_type: 'archive',
+  match_from: 'noise@personal.com'
+});
+
+// Verify account A queries do NOT return account B data
+const pendingA = claudiaDb.getPendingResponses(db, acct.id);
+assert.ok(!pendingA.some(c => c.id === 'personal:conv-1'), 'Account A pending should not contain account B conversation');
+
+const emailsA = claudiaDb.getEmailsByThread(db, acct.id, 'personal-thread-1');
+assert.strictEqual(emailsA.length, 0, 'Account A should not see account B emails');
+
+const unsubA = claudiaDb.checkUnsubscribed(db, acct.id, 'spam-personal.com');
+assert.strictEqual(unsubA.unsubscribed, false, 'Account A should not see account B unsubscribes');
+
+const rulesA = claudiaDb.getActiveRules(db, acct.id);
+assert.ok(!rulesA.some(r => r.match_from === 'noise@personal.com'), 'Account A should not see account B rules');
+
+// Verify account B queries return ONLY account B data
+const pendingB = claudiaDb.getPendingResponses(db, acctB.id);
+assert.strictEqual(pendingB.length, 1);
+assert.strictEqual(pendingB[0].id, 'personal:conv-1');
+
+const emailByGmailB = claudiaDb.getEmailByGmailId(db, acctB.id, 'personal-gmail-001');
+assert.ok(emailByGmailB);
+
+const emailByGmailA = claudiaDb.getEmailByGmailId(db, acct.id, 'personal-gmail-001');
+assert.strictEqual(emailByGmailA, undefined, 'Account A should not see account B gmail_id');
+
+console.log('PASS: multi-account isolation (conversations, emails, unsubscribes, rules)');
+
+console.log('\n--- Multi-account isolation tests passed ---');
+
+// --- Test: trackConversation upsert (same ID, updated fields) ---
+const origConv = db.prepare('SELECT * FROM conversations WHERE id = ?').get('personal:conv-1');
+const origFirstSeen = origConv.first_seen;
+
+// Upsert with same ID but different subject and waiting_for
+claudiaDb.trackConversation(db, acctB.id, {
+  id: 'personal:conv-1',
+  type: 'email',
+  subject: 'Updated Subject',
+  from_user: 'friend@example.com',
+  from_name: 'Friend',
+  last_sender: 'me',
+  waiting_for: 'their-response',
+  last_activity: Math.floor(Date.now() / 1000) + 100
+});
+
+const upserted = db.prepare('SELECT * FROM conversations WHERE id = ?').get('personal:conv-1');
+assert.strictEqual(upserted.subject, 'Updated Subject', 'Subject should update on upsert');
+assert.strictEqual(upserted.waiting_for, 'their-response', 'waiting_for should update on upsert');
+assert.strictEqual(upserted.first_seen, origFirstSeen, 'first_seen must NOT change on upsert');
+assert.strictEqual(upserted.state, 'active', 'state must NOT change on upsert');
+console.log('PASS: trackConversation upsert preserves first_seen, updates subject + waiting_for');
+
+// Verify no duplicate was created
+const allPersonalConvs = db.prepare('SELECT COUNT(*) as c FROM conversations WHERE id = ?').get('personal:conv-1');
+assert.strictEqual(allPersonalConvs.c, 1, 'Upsert must not create duplicates');
+console.log('PASS: trackConversation upsert does not create duplicates');
+
+console.log('\n--- Conversation upsert tests passed ---');
+
+// --- Test: olderThan filter for getPendingResponses ---
+const now2 = Math.floor(Date.now() / 1000);
+
+// Create conversations with controlled timestamps
+claudiaDb.trackConversation(db, acct.id, {
+  id: 'age-test:recent',
+  type: 'slack-dm',
+  from_user: 'recent@example.com',
+  from_name: 'Recent',
+  last_sender: 'them',
+  waiting_for: 'my-response',
+  last_activity: now2 - 1800 // 30 minutes ago
+});
+
+claudiaDb.trackConversation(db, acct.id, {
+  id: 'age-test:old',
+  type: 'slack-dm',
+  from_user: 'old@example.com',
+  from_name: 'Old',
+  last_sender: 'them',
+  waiting_for: 'my-response',
+  last_activity: now2 - (5 * 3600) // 5 hours ago
+});
+
+claudiaDb.trackConversation(db, acct.id, {
+  id: 'age-test:very-old',
+  type: 'slack-dm',
+  from_user: 'veryold@example.com',
+  from_name: 'Very Old',
+  last_sender: 'them',
+  waiting_for: 'my-response',
+  last_activity: now2 - (25 * 3600) // 25 hours ago
+});
+
+// olderThan = 4 hours (14400 seconds): should return 5h and 25h, NOT 30m
+const older4h = claudiaDb.getPendingResponses(db, acct.id, {
+  type: 'slack-dm',
+  olderThan: 4 * 3600
+});
+const older4hIds = older4h.map(c => c.id);
+assert.ok(!older4hIds.includes('age-test:recent'), 'Recent (30m) should NOT appear in olderThan 4h');
+assert.ok(older4hIds.includes('age-test:old'), 'Old (5h) should appear in olderThan 4h');
+assert.ok(older4hIds.includes('age-test:very-old'), 'Very old (25h) should appear in olderThan 4h');
+console.log('PASS: getPendingResponses olderThan filter works correctly');
+
+// olderThan = 24 hours: should return only the 25h one
+const older24h = claudiaDb.getPendingResponses(db, acct.id, {
+  type: 'slack-dm',
+  olderThan: 24 * 3600
+});
+const older24hIds = older24h.map(c => c.id);
+assert.ok(!older24hIds.includes('age-test:recent'), '30m should NOT appear in olderThan 24h');
+assert.ok(!older24hIds.includes('age-test:old'), '5h should NOT appear in olderThan 24h');
+assert.ok(older24hIds.includes('age-test:very-old'), '25h should appear in olderThan 24h');
+console.log('PASS: getPendingResponses olderThan 24h filter');
+
+// --- Test: olderThan for getAwaitingReplies ---
+claudiaDb.trackConversation(db, acct.id, {
+  id: 'await-test:recent',
+  type: 'email',
+  subject: 'Recent sent',
+  from_user: 'me@example.com',
+  from_name: 'Me',
+  last_sender: 'me',
+  waiting_for: 'their-response',
+  last_activity: now2 - 1800 // 30 minutes ago
+});
+
+claudiaDb.trackConversation(db, acct.id, {
+  id: 'await-test:old',
+  type: 'email',
+  subject: 'Old sent',
+  from_user: 'me@example.com',
+  from_name: 'Me',
+  last_sender: 'me',
+  waiting_for: 'their-response',
+  last_activity: now2 - (25 * 3600) // 25 hours ago
+});
+
+const awaitOld = claudiaDb.getAwaitingReplies(db, acct.id, {
+  type: 'email',
+  olderThan: 24 * 3600
+});
+const awaitOldIds = awaitOld.map(c => c.id);
+assert.ok(!awaitOldIds.includes('await-test:recent'), 'Recent awaiting should NOT appear in olderThan 24h');
+assert.ok(awaitOldIds.includes('await-test:old'), 'Old awaiting should appear in olderThan 24h');
+console.log('PASS: getAwaitingReplies olderThan filter works correctly');
+
+// --- Test: limit parameter ---
+const limitResults = claudiaDb.getPendingResponses(db, acct.id, {
+  type: 'slack-dm',
+  limit: 1
+});
+assert.strictEqual(limitResults.length, 1, 'limit should cap results');
+console.log('PASS: getPendingResponses limit parameter');
+
+console.log('\n--- Time-based filter tests passed ---');
+
+// --- Test: notified_at read-back in getPendingResponses ---
+claudiaDb.markNotified(db, 'age-test:old');
+const pendingWithNotified = claudiaDb.getPendingResponses(db, acct.id, { type: 'slack-dm' });
+const notifiedConv = pendingWithNotified.find(c => c.id === 'age-test:old');
+assert.ok(notifiedConv, 'Notified conv should still appear in pending (it is still active + my-response)');
+assert.ok(notifiedConv.notified_at, 'notified_at should be a valid timestamp after markNotified');
+assert.ok(typeof notifiedConv.notified_at === 'number', 'notified_at should be numeric');
+
+// Verify non-notified conv has null notified_at
+const nonNotified = pendingWithNotified.find(c => c.id === 'age-test:recent');
+assert.ok(nonNotified);
+assert.strictEqual(nonNotified.notified_at, null, 'Non-notified conv should have null notified_at');
+console.log('PASS: notified_at read-back in getPendingResponses');
+
+console.log('\n--- Notification read-back tests passed ---');
+
+// --- Test: resolveConversation idempotency ---
+claudiaDb.trackConversation(db, acct.id, {
+  id: 'resolve-idem-test',
+  type: 'email',
+  from_user: 'test@example.com',
+  from_name: 'Test',
+  last_sender: 'them',
+  waiting_for: 'my-response'
+});
+claudiaDb.resolveConversation(db, 'resolve-idem-test');
+const firstResolve = db.prepare('SELECT * FROM conversations WHERE id = ?').get('resolve-idem-test');
+const firstResolvedAt = firstResolve.resolved_at;
+assert.ok(firstResolvedAt);
+
+// Second resolve should be a no-op (WHERE resolved_at IS NULL prevents it)
+claudiaDb.resolveConversation(db, 'resolve-idem-test');
+const secondResolve = db.prepare('SELECT * FROM conversations WHERE id = ?').get('resolve-idem-test');
+assert.strictEqual(secondResolve.resolved_at, firstResolvedAt, 'Double resolve must not change resolved_at');
+console.log('PASS: resolveConversation is idempotent');
+
+// --- Test: updateConversationState on resolved conversation (guard) ---
+const beforeGuardUpdate = db.prepare('SELECT * FROM conversations WHERE id = ?').get('resolve-idem-test');
+claudiaDb.updateConversationState(db, 'resolve-idem-test', 'them', 'their-response');
+const afterUpdate = db.prepare('SELECT * FROM conversations WHERE id = ?').get('resolve-idem-test');
+assert.strictEqual(afterUpdate.state, 'resolved', 'State must remain resolved');
+assert.strictEqual(afterUpdate.waiting_for, beforeGuardUpdate.waiting_for, 'waiting_for must not change on resolved conv');
+assert.strictEqual(afterUpdate.last_activity, beforeGuardUpdate.last_activity, 'last_activity must not change on resolved conv');
+console.log('PASS: updateConversationState is no-op on resolved conversation');
+
+console.log('\n--- Guard clause tests passed ---');
+
+// --- Test: createRule with all match patterns + case normalization ---
+const domainRule = claudiaDb.createRule(db, acct.id, {
+  rule_type: 'archive',
+  match_from_domain: 'ZOOM.US'
+});
+assert.strictEqual(domainRule.match_from_domain, 'zoom.us', 'Domain should be lowercased');
+console.log('PASS: createRule lowercases match_from_domain');
+
+const subjectRule = claudiaDb.createRule(db, acct.id, {
+  rule_type: 'alert',
+  match_subject_contains: 'URGENT: Server Down'
+});
+assert.strictEqual(subjectRule.match_subject_contains, 'urgent: server down', 'Subject match should be lowercased');
+console.log('PASS: createRule lowercases match_subject_contains');
+
+const toRule = claudiaDb.createRule(db, acct.id, {
+  rule_type: 'flag',
+  match_to: 'DL-Engineering@EXAMPLE.COM'
+});
+assert.strictEqual(toRule.match_to, 'dl-engineering@example.com', 'match_to should be lowercased');
+console.log('PASS: createRule lowercases match_to');
+
+// Combined multi-condition rule
+const comboRule = claudiaDb.createRule(db, acct.id, {
+  rule_type: 'demote',
+  match_from_domain: 'notifications.github.com',
+  match_subject_contains: 'dependabot'
+});
+assert.strictEqual(comboRule.match_from_domain, 'notifications.github.com');
+assert.strictEqual(comboRule.match_subject_contains, 'dependabot');
+assert.strictEqual(comboRule.rule_type, 'demote');
+console.log('PASS: createRule with combined match conditions');
+
+// --- Test: Rule reactivation after deactivation ---
+const ruleToDeactivate = claudiaDb.createRule(db, acct.id, {
+  rule_type: 'archive',
+  match_from: 'reactivate-test@example.com'
+});
+const originalRuleId = ruleToDeactivate.id;
+claudiaDb.deactivateRule(db, originalRuleId);
+
+// Verify it's deactivated
+const deactivatedCheck = claudiaDb.getRuleById(db, originalRuleId);
+assert.strictEqual(deactivatedCheck.active, 0);
+
+// Re-create the exact same rule -- should reactivate, not create a new row
+const reactivated = claudiaDb.createRule(db, acct.id, {
+  rule_type: 'archive',
+  match_from: 'reactivate-test@example.com'
+});
+assert.strictEqual(reactivated.active, 1, 'Re-created rule should be active');
+// The id might differ due to lastInsertRowid behavior, but the rule should be active
+const allMatchingRules = db.prepare(
+  "SELECT * FROM email_rules WHERE account_id = ? AND match_from = 'reactivate-test@example.com'"
+).all(acct.id);
+assert.strictEqual(allMatchingRules.length, 1, 'Reactivation must not create duplicate rows');
+assert.strictEqual(allMatchingRules[0].active, 1);
+console.log('PASS: createRule reactivates deactivated rule (no duplicates)');
+
+console.log('\n--- Rule edge case tests passed ---');
+
+// --- Test: Full conversation lifecycle ---
+// track → getPending → resolve → NOT in pending → in getResolvedToday
+claudiaDb.trackConversation(db, acct.id, {
+  id: 'lifecycle-test',
+  type: 'email',
+  subject: 'Lifecycle Test Email',
+  from_user: 'lifecycle@example.com',
+  from_name: 'Lifecycle',
+  last_sender: 'them',
+  waiting_for: 'my-response'
+});
+
+// Should appear in pending
+const lifecyclePending = claudiaDb.getPendingResponses(db, acct.id, { type: 'email' });
+assert.ok(lifecyclePending.some(c => c.id === 'lifecycle-test'), 'New conv should appear in pending');
+
+// Resolve it
+claudiaDb.resolveConversation(db, 'lifecycle-test');
+
+// Should NOT appear in pending anymore
+const lifecyclePending2 = claudiaDb.getPendingResponses(db, acct.id, { type: 'email' });
+assert.ok(!lifecyclePending2.some(c => c.id === 'lifecycle-test'), 'Resolved conv must not appear in pending');
+
+// Should appear in resolved today
+const lifecycleResolved = claudiaDb.getResolvedToday(db, acct.id, 'email');
+assert.ok(lifecycleResolved.some(c => c.id === 'lifecycle-test'), 'Resolved conv should appear in getResolvedToday');
+
+console.log('PASS: full conversation lifecycle (pending → resolve → not pending → resolvedToday)');
+
+console.log('\n--- Lifecycle tests passed ---');
+
+// --- Test: getStats accuracy ---
+// Use account B which has a known, controlled state: 1 conversation (personal:conv-1)
+// that we upserted to 'their-response' earlier
+const statsB = claudiaDb.getStats(db, acctB.id);
+assert.strictEqual(statsB.total, 1, 'Account B should have exactly 1 active conversation');
+assert.strictEqual(statsB.breakdown.length, 1, 'Account B should have 1 breakdown row');
+assert.strictEqual(statsB.breakdown[0].type, 'email');
+assert.strictEqual(statsB.breakdown[0].waiting_for, 'their-response');
+assert.strictEqual(statsB.breakdown[0].count, 1);
+console.log('PASS: getStats returns accurate breakdown');
+
+// --- Test: updateConversationState updates last_activity ---
+// Record current last_activity, then update state and verify it changed
+const beforeState = db.prepare('SELECT last_activity FROM conversations WHERE id = ?').get('age-test:recent');
+const beforeActivity = beforeState.last_activity;
+
+// Brief pause to ensure timestamp changes (SQLite second-level resolution)
+// Instead, we can check that it's >= the before value (same second is OK)
+claudiaDb.updateConversationState(db, 'age-test:recent', 'me', 'their-response');
+const afterState = db.prepare('SELECT last_activity FROM conversations WHERE id = ?').get('age-test:recent');
+assert.ok(afterState.last_activity >= beforeActivity, 'last_activity should be updated (>= before value)');
+assert.ok(afterState.last_activity >= now2, 'last_activity should be current time, not the original 30min-ago value');
+console.log('PASS: updateConversationState updates last_activity');
+
+console.log('\n--- Behavioral contract tests passed ---');
+
+// --- Test: Action log JSON round-trip ---
+claudiaDb.logAction(db, {
+  accountId: acct.id, actor: 'test', entityType: 'email', entityId: 'roundtrip-test',
+  action: 'tested',
+  context: { nested: { key: 'value' }, arr: [1, 2, 3] },
+  outcome: { success: true, count: 42 }
+});
+const roundTrip = claudiaDb.getEntityHistory(db, 'email', 'roundtrip-test');
+assert.strictEqual(roundTrip.length, 1);
+const parsedContext = JSON.parse(roundTrip[0].context);
+assert.deepStrictEqual(parsedContext.nested, { key: 'value' });
+assert.deepStrictEqual(parsedContext.arr, [1, 2, 3]);
+const parsedOutcome = JSON.parse(roundTrip[0].outcome);
+assert.strictEqual(parsedOutcome.success, true);
+assert.strictEqual(parsedOutcome.count, 42);
+console.log('PASS: action log JSON round-trip');
+
+console.log('\n--- JSON serialization tests passed ---');
+
 console.log('\n=== ALL CLAUDIA-DB TESTS PASSED ===');
