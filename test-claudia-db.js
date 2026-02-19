@@ -269,3 +269,41 @@ assert.ok(stats.total >= 1);
 console.log('PASS: getStats');
 
 console.log('\n--- Task 3 conversation tests passed ---');
+
+// --- Test: recordUnsubscribe ---
+const unsub = claudiaDb.recordUnsubscribe(db, acct.id, {
+  sender_addr: 'marketing@vanta.com',
+  sender_domain: 'vanta.com',
+  method: 'list-unsubscribe-post',
+  unsubscribe_url: 'https://vanta.com/unsubscribe?token=abc',
+  metadata: { trigger_email_subject: 'Vanta Security Update' }
+});
+assert.ok(unsub.id);
+assert.strictEqual(unsub.sender_domain, 'vanta.com');
+assert.strictEqual(unsub.confirmed, 0);
+console.log('PASS: recordUnsubscribe');
+
+// --- Test: checkUnsubscribed ---
+const check = claudiaDb.checkUnsubscribed(db, acct.id, 'vanta.com');
+assert.strictEqual(check.unsubscribed, true);
+assert.strictEqual(check.emails_since, 0);
+console.log('PASS: checkUnsubscribed (positive)');
+
+const checkNone = claudiaDb.checkUnsubscribed(db, acct.id, 'unknown.com');
+assert.strictEqual(checkNone.unsubscribed, false);
+console.log('PASS: checkUnsubscribed (negative)');
+
+// --- Test: incrementEmailsSince ---
+claudiaDb.incrementEmailsSince(db, acct.id, 'vanta.com');
+claudiaDb.incrementEmailsSince(db, acct.id, 'vanta.com');
+const check2 = claudiaDb.checkUnsubscribed(db, acct.id, 'vanta.com');
+assert.strictEqual(check2.emails_since, 2);
+console.log('PASS: incrementEmailsSince');
+
+// --- Test: confirmUnsubscribe ---
+claudiaDb.confirmUnsubscribe(db, unsub.id);
+const check3 = claudiaDb.checkUnsubscribed(db, acct.id, 'vanta.com');
+assert.strictEqual(check3.confirmed, true);
+console.log('PASS: confirmUnsubscribe');
+
+console.log('\n--- Task 4 unsubscribe tests passed ---');
