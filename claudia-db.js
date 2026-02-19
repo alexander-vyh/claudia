@@ -495,6 +495,51 @@ function getStats(db, accountId) {
   return { total, breakdown: rows };
 }
 
+// --- Unsubscribes ---
+
+function recordUnsubscribe(db, accountId, { sender_addr = null, sender_domain, method,
+    unsubscribe_url = null, metadata = null }) {
+  const id = generateId();
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare(`INSERT INTO unsubscribes (id, account_id, sender_addr, sender_domain, method,
+    unsubscribe_url, requested_at, metadata)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, accountId, sender_addr, sender_domain, method, unsubscribe_url, now,
+    metadata ? JSON.stringify(metadata) : null);
+  return db.prepare('SELECT * FROM unsubscribes WHERE id = ?').get(id);
+}
+
+function checkUnsubscribed(db, accountId, senderDomain) {
+  const row = db.prepare(
+    'SELECT * FROM unsubscribes WHERE account_id = ? AND sender_domain = ? ORDER BY requested_at DESC LIMIT 1'
+  ).get(accountId, senderDomain);
+  if (!row) return { unsubscribed: false, emails_since: 0, confirmed: false };
+  return {
+    unsubscribed: true,
+    emails_since: row.emails_since,
+    confirmed: !!row.confirmed,
+    requested_at: row.requested_at,
+    method: row.method,
+    id: row.id
+  };
+}
+
+function incrementEmailsSince(db, accountId, senderDomain) {
+  db.prepare(
+    `UPDATE unsubscribes SET emails_since = emails_since + 1
+     WHERE account_id = ? AND sender_domain = ? AND id = (
+       SELECT id FROM unsubscribes WHERE account_id = ? AND sender_domain = ?
+       ORDER BY requested_at DESC LIMIT 1
+     )`
+  ).run(accountId, senderDomain, accountId, senderDomain);
+}
+
+function confirmUnsubscribe(db, unsubscribeId) {
+  db.prepare(
+    "UPDATE unsubscribes SET confirmed = 1, confirmed_at = strftime('%s','now') WHERE id = ?"
+  ).run(unsubscribeId);
+}
+
 module.exports = {
   DB_PATH,
   ENTITY_TYPES,
@@ -519,4 +564,8 @@ module.exports = {
   getAwaitingReplies,
   getResolvedToday,
   getStats,
+  recordUnsubscribe,
+  checkUnsubscribed,
+  incrementEmailsSince,
+  confirmUnsubscribe,
 };
