@@ -115,6 +115,37 @@ if let deviceIdx = args.firstIndex(of: "--device") {
 
 // MARK: - Daemon Mode
 
+// Check if another instance is already running on the target port
+func isPortInUse(_ port: UInt16) -> Bool {
+    let socket = socket(AF_INET, SOCK_STREAM, 0)
+    guard socket >= 0 else { return false }
+    defer { close(socket) }
+
+    var addr = sockaddr_in()
+    addr.sin_family = sa_family_t(AF_INET)
+    addr.sin_port = port.bigEndian
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+
+    let result = withUnsafePointer(to: &addr) { ptr in
+        ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+            Darwin.connect(socket, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+        }
+    }
+    return result == 0
+}
+
+// Parse port early so we can check it
+var port = config.httpPort
+if let portIdx = args.firstIndex(of: "--port"), portIdx + 1 < args.count,
+   let customPort = UInt16(args[portIdx + 1]) {
+    port = customPort
+}
+
+if isPortInUse(port) {
+    fputs("Error: port \(port) is already in use. Another meeting-recorder instance may be running.\n", stderr)
+    exit(1)
+}
+
 logger.notice("Starting meeting-recorder daemon")
 
 do {
@@ -122,13 +153,6 @@ do {
 } catch {
     logger.error("Failed to create directories: \(error.localizedDescription)")
     exit(1)
-}
-
-// Parse optional port override
-var port = config.httpPort
-if let portIdx = args.firstIndex(of: "--port"), portIdx + 1 < args.count,
-   let customPort = UInt16(args[portIdx + 1]) {
-    port = customPort
 }
 
 let deviceManager = AudioDeviceManager()

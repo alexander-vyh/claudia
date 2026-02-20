@@ -100,6 +100,39 @@ def transcribe_audio(wav_path: str, model: str, language: str | None) -> dict:
     return result
 
 
+def load_audio(wav_path: str) -> dict:
+    """Load a WAV file into a waveform dict compatible with pyannote pipelines.
+
+    Uses scipy.io.wavfile to avoid torchcodec/FFmpeg dependency issues.
+    Returns {"waveform": torch.Tensor (channels, samples), "sample_rate": int}.
+    """
+    import torch
+    from scipy.io import wavfile
+
+    sample_rate, data = wavfile.read(wav_path)
+    import numpy as np
+
+    # Convert to float32 in [-1, 1]
+    if data.dtype == np.int16:
+        audio = data.astype(np.float32) / 32768.0
+    elif data.dtype == np.int32:
+        audio = data.astype(np.float32) / 2147483648.0
+    elif data.dtype == np.float32:
+        audio = data
+    else:
+        audio = data.astype(np.float32)
+
+    # Ensure 2D: (channels, samples)
+    if audio.ndim == 1:
+        audio = audio[np.newaxis, :]
+    elif audio.ndim == 2:
+        # scipy returns (samples, channels) — transpose to (channels, samples)
+        audio = audio.T
+
+    waveform = torch.from_numpy(audio)
+    return {"waveform": waveform, "sample_rate": sample_rate}
+
+
 def run_diarization(wav_path: str) -> list[dict]:
     """Run pyannote speaker diarization, return list of {start, end, speaker} segments."""
     log.info("Running speaker diarization...")
@@ -119,7 +152,9 @@ def run_diarization(wav_path: str) -> list[dict]:
     )
     pipeline.to(device)
 
-    diarization = pipeline(wav_path)
+    # Pre-load audio with scipy to avoid torchcodec/FFmpeg issues
+    audio = load_audio(wav_path)
+    diarization = pipeline(audio)
 
     speaker_segments = []
     for turn, _, speaker in diarization.itertracks(yield_label=True):

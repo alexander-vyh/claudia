@@ -5,10 +5,20 @@ import Foundation
 struct StartRecordingRequest: Codable {
     let meetingId: String
     let title: String
-    let attendees: [String]
+    var attendees: [String]
     var startTime: String?
     var endTime: String?
     var deviceHint: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        meetingId = try container.decode(String.self, forKey: .meetingId)
+        title = try container.decode(String.self, forKey: .title)
+        attendees = try container.decodeIfPresent([String].self, forKey: .attendees) ?? []
+        startTime = try container.decodeIfPresent(String.self, forKey: .startTime)
+        endTime = try container.decodeIfPresent(String.self, forKey: .endTime)
+        deviceHint = try container.decodeIfPresent(String.self, forKey: .deviceHint)
+    }
 }
 
 struct StopRecordingRequest: Codable {
