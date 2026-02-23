@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node test-service-manager.js",
-    "build": "electron-builder --mac --dir",
+    "build": "rm -rf dist && electron-builder --mac --dir",
     "dist": "electron-builder --mac"
   },
   "devDependencies": {
