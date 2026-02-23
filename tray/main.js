@@ -43,7 +43,7 @@ function getAggregateIcon(statuses) {
   const effectives = statuses.map(s => getEffectiveStatus(s));
   if (effectives.some(e => e === 'error' || e === 'stopped' || e === 'startup-failed')) return getIcon('red');
   if (effectives.some(e => e === 'unresponsive' || e === 'degraded')) return getIcon('yellow');
-  if (effectives.every(e => e === 'running')) return getIcon('green');
+  if (effectives.every(e => e === 'running' || e === 'unloaded' || e === 'unknown')) return getIcon('green');
   return getIcon('yellow');
 }
 
