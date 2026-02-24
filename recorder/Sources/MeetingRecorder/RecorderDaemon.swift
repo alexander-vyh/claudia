@@ -17,6 +17,9 @@ final class RecorderDaemon {
     /// Current live transcript store (nil when not recording)
     private(set) var liveStore: LiveTranscriptStore?
 
+    private let micMonitor = MicMonitor()
+    private var heartbeatTimer: DispatchSourceTimer?
+
     struct RecordingSession {
         let meetingId: String
         let title: String
@@ -26,7 +29,6 @@ final class RecorderDaemon {
         let wavPath: String
         let pythonProcess: Process?
         let pythonStdinPipe: Pipe?
-        var liveSegments: [[String: Any]] = []
     }
 
     init(config: RecorderConfig, deviceManager: AudioDeviceManager) {
@@ -101,6 +103,22 @@ final class RecorderDaemon {
         // Start audio capture (also writes WAV internally)
         try recorder.startRecording(toOutputFile: wavURL, deviceID: deviceID)
 
+        // Start mic monitor for self/others detection
+        let micDeviceID = resolveMicDevice()
+        if micDeviceID != 0 {
+            do {
+                try micMonitor.start(deviceID: micDeviceID)
+            } catch {
+                logger.warning("Mic monitor failed to start: \(error.localizedDescription). Self/others detection disabled.")
+            }
+        }
+
+        // Create live transcript store
+        liveStore = LiveTranscriptStore(meetingId: meetingId, title: title, micMonitor: micMonitor)
+
+        // Start SSE heartbeat timer (every 15 seconds)
+        startHeartbeat()
+
         activeSession = RecordingSession(
             meetingId: meetingId,
             title: title,
@@ -148,6 +166,19 @@ final class RecorderDaemon {
         }
 
         let wavPath = session.wavPath
+
+        // Persist live transcript and metrics
+        liveStore?.notifyStopped()
+        liveStore?.persist(to: config.resolvedRecordingsDir)
+        liveStore?.removeAllSubscribers()
+        liveStore = nil
+
+        // Stop mic monitor
+        micMonitor.stop()
+        micMonitor.clearHistory()
+
+        // Stop heartbeat
+        stopHeartbeat()
 
         // Launch batch post-processing in background
         launchPostProcessor(session: session)
@@ -275,9 +306,37 @@ final class RecorderDaemon {
 
         // Transcript segment
         if let text = json["text"] as? String {
+            let start = json["start"] as? Double ?? 0.0
+            let end = json["end"] as? Double ?? 0.0
             logger.info("Live: \(text)")
-            activeSession?.liveSegments.append(json)
+            liveStore?.addSegment(text: text, start: start, end: end)
         }
+    }
+
+    // MARK: - Mic & Heartbeat Helpers
+
+    private func resolveMicDevice() -> AudioDeviceID {
+        let micHint = config.micDevice
+        if !micHint.isEmpty, let id = deviceManager.findDevice(byName: micHint) {
+            return id
+        }
+        // Fall back to system default input
+        return deviceManager.getSystemDefaultDevice() ?? 0
+    }
+
+    private func startHeartbeat() {
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + 15, repeating: 15)
+        timer.setEventHandler { [weak self] in
+            self?.liveStore?.sendHeartbeat()
+        }
+        timer.resume()
+        heartbeatTimer = timer
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTimer?.cancel()
+        heartbeatTimer = nil
     }
 
     // MARK: - Post-Processing
