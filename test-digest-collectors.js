@@ -249,3 +249,55 @@ assert.ok(upcoming.observation.includes('Dev Reyes'));
 console.log('PASS: O3 upcoming shown');
 
 console.log('\n=== O3 COLLECTOR TESTS PASSED ===');
+
+// ============================================================
+// CALENDAR COLLECTOR TESTS
+// ============================================================
+
+const { collectCalendar } = require('./lib/digest-collectors');
+
+// --- Test with mock calendar events ---
+const mockEvents = [
+  {
+    id: 'event-1',
+    summary: 'Sync with Sarah',
+    start: { dateTime: new Date(Date.now() + 86400000).toISOString() },
+    end: { dateTime: new Date(Date.now() + 86400000 + 1800000).toISOString() },
+    attendees: [
+      { email: 'test@example.com', self: true },
+      { email: 'sarah@example.com', displayName: 'Sarah Chen' }
+    ]
+  },
+  {
+    id: 'event-2',
+    summary: 'Team standup',
+    start: { dateTime: new Date(Date.now() + 86400000 + 3600000).toISOString() },
+    end: { dateTime: new Date(Date.now() + 86400000 + 5400000).toISOString() },
+    attendees: [
+      { email: 'test@example.com', self: true },
+      { email: 'nobody@example.com', displayName: 'Nobody' }
+    ]
+  }
+];
+
+// sarah@example.com has an unreplied conversation (from followup test data above)
+const calItems = collectCalendar(db, acct.id, mockEvents);
+
+assert.ok(Array.isArray(calItems));
+
+// Should flag meeting with Sarah because she has an open conversation
+const meetingWithFollowup = calItems.find(
+  i => i.category === 'meeting-with-open-followups' && i.observation.includes('Sarah')
+);
+assert.ok(meetingWithFollowup, 'Should flag meeting with attendee who has open followup');
+assert.strictEqual(meetingWithFollowup.priority, 'high');
+console.log('PASS: meeting with open followup flagged');
+
+// Meeting with nobody@example.com should NOT produce a followup item
+const nobodyItem = calItems.find(
+  i => i.category === 'meeting-with-open-followups' && i.observation.includes('Nobody')
+);
+assert.ok(!nobodyItem, 'Should not flag meeting with attendee who has no open followups');
+console.log('PASS: meeting without open followups not flagged');
+
+console.log('\n=== CALENDAR COLLECTOR TESTS PASSED ===');
