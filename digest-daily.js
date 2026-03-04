@@ -10,6 +10,9 @@ const { collectFollowups, collectEmail, collectO3, collectCalendar } = require('
 const { deduplicateItems } = require('./lib/digest-item');
 const { narrateDaily, formatFallback } = require('./lib/digest-narration');
 const calendarAuth = require('./calendar-auth');
+const { collectFeedback } = require('./lib/feedback-collector');
+const { buildFeedbackBlocks } = require('./lib/feedback-blocks');
+const peopleStore = require('./lib/people-store');
 
 const SERVICE_NAME = 'digest-daily';
 
@@ -89,6 +92,27 @@ async function main() {
     }
   }
 
+  // Feedback collector (async — separate from sync collectors)
+  let feedbackItems = [];
+  try {
+    const slackIdMap = peopleStore.getSlackIdMap(db);
+    feedbackItems = await collectFeedback(slackIdMap, { scanWindowHours: 24 });
+    log.info({ count: feedbackItems.length }, 'Feedback collector complete');
+  } catch (err) {
+    log.error({ err }, 'Feedback collector failed');
+    failedCollectors.push('feedback');
+  }
+
+  // Persist feedback candidates for gateway/Reticle access
+  for (const item of feedbackItems) {
+    db.prepare(`
+      INSERT OR IGNORE INTO feedback_candidates
+        (account_id, report_name, channel, raw_artifact, draft, feedback_type, entity_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(accountId, item.counterparty, item.authority,
+        item.rawArtifact, item.feedbackDraft, item.feedbackType, item.entityId);
+  }
+
   if (allItems.length === 0 && failedCollectors.length === collectors.length) {
     await sendSlackDM('Daily digest unavailable — all collectors failed. Check logs.');
     process.exit(1);
@@ -106,10 +130,13 @@ async function main() {
     items: allItems
   });
 
+  // Separate feedback items from regular digest items for narration
+  const regularItems = allItems.filter(i => i.collector !== 'feedback');
+
   // Layer 3: AI narration
   let message;
   try {
-    message = await narrateDaily(allItems);
+    message = await narrateDaily(regularItems);
   } catch (err) {
     log.warn({ err }, 'First narration attempt failed');
   }
@@ -118,7 +145,7 @@ async function main() {
     log.warn('Retrying narration in 30s');
     await new Promise(r => setTimeout(r, 30000));
     try {
-      message = await narrateDaily(allItems);
+      message = await narrateDaily(regularItems);
     } catch (err) {
       log.warn({ err }, 'Second narration attempt failed');
     }
@@ -126,7 +153,7 @@ async function main() {
 
   if (!message) {
     log.warn('Narration failed — using fallback');
-    message = formatFallback(allItems);
+    message = formatFallback(regularItems);
   }
 
   // Add note about failed collectors
@@ -134,9 +161,15 @@ async function main() {
     message += `\n\n_Note: ${failedCollectors.join(', ')} data unavailable for this digest._`;
   }
 
+  if (feedbackItems.length > 0) {
+    message += `\n\n:pencil: *${feedbackItems.length} feedback candidate${feedbackItems.length > 1 ? 's' : ''} waiting* — open Reticle to review`;
+  }
+
+  const feedbackBlocks = buildFeedbackBlocks(feedbackItems);
+
   // Deliver
   try {
-    await sendSlackDM(message);
+    await sendSlackDM(message, feedbackBlocks.length > 0 ? feedbackBlocks : null);
     log.info('Daily digest delivered');
   } catch (err) {
     log.error({ err }, 'Failed to deliver digest to Slack');

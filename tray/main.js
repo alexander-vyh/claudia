@@ -1,10 +1,24 @@
 'use strict';
 
 const { app, Tray, Menu, Notification, shell, dialog } = require('electron');
+const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const serviceManager = require('./service-manager');
 const icons = require('./icons');
+
+const configDir = process.env.CLAUDIA_CONFIG_DIR || path.join(os.homedir(), '.claudia', 'config');
+let gatewayPort = 3001;
+let feedbackConfig = { weeklyTarget: 3 };
+try {
+  const secrets = JSON.parse(fs.readFileSync(path.join(configDir, 'secrets.json'), 'utf-8'));
+  if (secrets.gatewayPort) gatewayPort = secrets.gatewayPort;
+  const team = JSON.parse(fs.readFileSync(path.join(configDir, 'team.json'), 'utf-8'));
+  if (team.feedback) feedbackConfig = team.feedback;
+} catch {}
+
+const RECORDER_PORT = 9847;
 
 // Single instance lock
 const gotLock = app.requestSingleInstanceLock();
@@ -35,6 +49,97 @@ let spinInterval = null;
 let lastNotificationTime = {};
 const NOTIFICATION_COOLDOWN = 15 * 60 * 1000; // 15 minutes
 
+// Recorder session state — polled every 5s, used synchronously in buildMenu
+let recorderStatus = null;
+
+function recorderHttp(method, path, body) {
+  return new Promise((resolve, reject) => {
+    const bodyStr = body ? JSON.stringify(body) : null;
+    const opts = {
+      hostname: 'localhost', port: RECORDER_PORT, path, method,
+      headers: bodyStr ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) } : {}
+    };
+    const req = http.request(opts, (res) => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
+    });
+    req.on('error', reject);
+    req.setTimeout(1500, () => { req.destroy(); reject(new Error('timeout')); });
+    if (bodyStr) req.write(bodyStr);
+    req.end();
+  });
+}
+
+async function pollRecorderStatus() {
+  try {
+    recorderStatus = await recorderHttp('GET', '/status');
+  } catch {
+    recorderStatus = null;
+  }
+  refreshStatus();
+}
+
+// Feedback stats — polled every 60s, used synchronously in buildMenu
+let feedbackMenuItems = [{ label: '  Feedback: loading...', enabled: false }];
+
+async function getFeedbackMenu() {
+  try {
+    const res = await new Promise((resolve, reject) => {
+      const req = http.get(`http://localhost:${gatewayPort}/feedback/stats`, (r) => {
+        let data = '';
+        r.on('data', d => data += d);
+        r.on('end', () => { try { resolve(JSON.parse(data)); } catch { reject(); } });
+      });
+      req.on('error', reject);
+      req.setTimeout(2000, () => { req.destroy(); reject(new Error('timeout')); });
+    });
+
+    const { weekly } = res;
+    const items = [];
+    const target = feedbackConfig.weeklyTarget || 3;
+
+    for (const name of Object.keys(weekly || {})) {
+      const w = weekly[name] || { delivered: 0 };
+      const bar = '\u2588'.repeat(Math.min(w.delivered, target)) + '\u2500'.repeat(Math.max(0, target - w.delivered));
+      items.push({ label: `  ${name}  ${bar} ${w.delivered}/${target}`, enabled: false });
+    }
+
+    if (items.length === 0) {
+      items.push({ label: '  No feedback data yet', enabled: false });
+    }
+
+    return items;
+  } catch {
+    return [{ label: '  Feedback unavailable', enabled: false }];
+  }
+}
+
+async function pollFeedbackStats() {
+  feedbackMenuItems = await getFeedbackMenu();
+  refreshStatus(); // rebuild menu with updated data
+}
+
+async function stopRecording() {
+  try { await recorderHttp('POST', '/stop', { meetingId: 'manual-stop' }); } catch {}
+  setTimeout(pollRecorderStatus, 800);
+}
+
+async function startRecordingNow() {
+  const now = new Date();
+  const meetingId = `manual-${now.toISOString().replace(/[:.]/g, '-')}`;
+  try {
+    await recorderHttp('POST', '/start', {
+      meetingId,
+      title: 'Manual Recording',
+      attendees: [],
+      startTime: now.toISOString(),
+      endTime: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString()
+    });
+  } catch {}
+  setTimeout(pollRecorderStatus, 800);
+}
+
 function getIcon(name) {
   if (!iconCache[name]) iconCache[name] = icons[name]();
   return iconCache[name];
@@ -46,6 +151,30 @@ function getAggregateIcon(statuses) {
   if (effectives.some(e => e === 'unresponsive' || e === 'degraded')) return getIcon('yellow');
   if (effectives.every(e => e === 'running' || e === 'unloaded' || e === 'unknown')) return getIcon('green');
   return getIcon('yellow');
+}
+
+function buildRecordingItems() {
+  const rs = recorderStatus;
+  if (!rs) {
+    return [
+      { label: '⚫  Recorder: offline', enabled: false },
+      { type: 'separator' }
+    ];
+  }
+  if (rs.recording) {
+    const mins = rs.duration != null ? Math.round(rs.duration / 60) : 0;
+    const title = (rs.title || 'Unknown Meeting').slice(0, 40);
+    return [
+      { label: `⏺  ${title}  (${mins}m)`, enabled: false },
+      { label: 'Stop Recording', click: () => stopRecording() },
+      { type: 'separator' }
+    ];
+  }
+  return [
+    { label: '○  Recorder: idle', enabled: false },
+    { label: 'Start Recording Now', click: () => startRecordingNow() },
+    { type: 'separator' }
+  ];
 }
 
 function buildMenu(statuses) {
@@ -98,9 +227,13 @@ function buildMenu(statuses) {
   });
 
   return Menu.buildFromTemplate([
+    ...buildRecordingItems(),
     { label: `Claudia — ${runningCount}/${statuses.length} running`, enabled: false },
     { type: 'separator' },
     ...serviceItems,
+    { type: 'separator' },
+    { label: '── Feedback ──', enabled: false },
+    ...feedbackMenuItems,
     { type: 'separator' },
     {
       label: 'Start All',
@@ -250,6 +383,14 @@ app.whenReady().then(async () => {
 
   refreshStatus();
   setInterval(refreshStatus, 10 * 1000);
+
+  // Recorder session polling (independent of service status)
+  pollRecorderStatus();
+  setInterval(pollRecorderStatus, 5 * 1000);
+
+  // Feedback stats polling
+  pollFeedbackStats();
+  setInterval(pollFeedbackStats, 60 * 1000);
 
   await promptLoginItem();
 });
