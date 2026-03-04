@@ -225,6 +225,30 @@ function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_digest_date ON digest_snapshots(account_id, snapshot_date);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_digest_unique ON digest_snapshots(account_id, snapshot_date, cadence);
+
+    CREATE TABLE IF NOT EXISTS monitored_people (
+      id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(8)))),
+      email       TEXT UNIQUE NOT NULL,
+      name        TEXT,
+      slack_id    TEXT,
+      jira_id     TEXT,
+      resolved_at INTEGER,
+      created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS feedback_candidates (
+      id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(8)))),
+      created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+      account_id  TEXT,
+      report_name TEXT NOT NULL,
+      channel     TEXT,
+      raw_artifact TEXT NOT NULL,
+      draft       TEXT,
+      feedback_type TEXT,
+      entity_id   TEXT UNIQUE,
+      status      TEXT NOT NULL DEFAULT 'pending'
+    );
+    CREATE INDEX IF NOT EXISTS idx_feedback_status ON feedback_candidates(status);
   `);
 
   return db;
