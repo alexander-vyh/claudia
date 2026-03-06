@@ -58,7 +58,7 @@ struct ReticleIcon: View {
         ))
 
         // Draw ring into a sublayer so we can punch gaps with .clear blend
-        var ringLayer = context
+        let ringLayer = context
         ringLayer.fill(annulus, with: .color(.white), style: FillStyle(eoFill: true))
 
         // Punch out the 4 cardinal gap rectangles
