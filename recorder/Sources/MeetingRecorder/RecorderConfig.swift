@@ -12,6 +12,18 @@ struct RecorderConfig: Codable {
     var language: String = "auto"
     var micDevice: String = ""
     var micVadThreshold: Double = 0.01
+    var heartbeatDir: String = "~/.reticle/heartbeats"
+    var meetingApps: [String] = [
+        "us.zoom.xos",              // Zoom
+        "com.microsoft.teams2",     // Teams
+        "com.tinyspeck.slackmacgap" // Slack
+    ]
+    var browserApps: [String] = [
+        "com.apple.Safari",
+        "com.google.Chrome",
+        "org.mozilla.firefox",
+        "company.thebrowser.Browser" // Arc
+    ]
 
     static let configPath = NSString("~/.config/reticle/recorder.json").expandingTildeInPath
     private static let logger = Logger(subsystem: "ai.reticle.meeting-recorder", category: "Config")
@@ -22,6 +34,10 @@ struct RecorderConfig: Codable {
 
     var resolvedRecordingsDir: String {
         NSString(string: recordingsDir).expandingTildeInPath
+    }
+
+    var resolvedHeartbeatDir: String {
+        NSString(string: heartbeatDir).expandingTildeInPath
     }
 
     var resolvedPythonVenvPath: String {
@@ -69,7 +85,7 @@ struct RecorderConfig: Codable {
 
     func ensureDirectories() throws {
         let fm = FileManager.default
-        for dir in [resolvedTranscriptsDir, resolvedRecordingsDir] {
+        for dir in [resolvedTranscriptsDir, resolvedRecordingsDir, resolvedHeartbeatDir] {
             if !fm.fileExists(atPath: dir) {
                 try fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
             }
