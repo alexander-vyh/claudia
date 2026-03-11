@@ -909,11 +909,13 @@ function createMeeting(db, { id, title, startTime, endTime, durationSec,
       title = COALESCE(excluded.title, meetings.title),
       end_time = COALESCE(excluded.end_time, meetings.end_time),
       duration_sec = COALESCE(excluded.duration_sec, meetings.duration_sec),
+      attendee_emails = COALESCE(excluded.attendee_emails, meetings.attendee_emails),
+      capture_mode = COALESCE(excluded.capture_mode, meetings.capture_mode),
       transcript_path = COALESCE(excluded.transcript_path, meetings.transcript_path),
       wav_path = COALESCE(excluded.wav_path, meetings.wav_path)`)
-  .run(id, title || null, startTime, endTime || null, durationSec || null,
+  .run(id, title ?? null, startTime, endTime ?? null, durationSec ?? null,
     attendeeEmails ? JSON.stringify(attendeeEmails) : null,
-    captureMode || null, transcriptPath || null, wavPath || null);
+    captureMode ?? null, transcriptPath ?? null, wavPath ?? null);
   return db.prepare('SELECT * FROM meetings WHERE id = ?').get(id);
 }
 
@@ -923,7 +925,7 @@ function getMeeting(db, id) {
 
 function listMeetings(db, { limit = 50 } = {}) {
   return db.prepare(
-    'SELECT m.*, ms.summary FROM meetings m LEFT JOIN meeting_summaries ms ON m.id = ms.meeting_id ORDER BY m.start_time DESC LIMIT ?'
+    'SELECT m.*, (SELECT summary FROM meeting_summaries WHERE meeting_id = m.id ORDER BY created_at DESC, id DESC LIMIT 1) as summary FROM meetings m ORDER BY m.start_time DESC LIMIT ?'
   ).all(limit);
 }
 
@@ -932,7 +934,10 @@ function getTodaysMeetings(db) {
   startOfDay.setHours(0, 0, 0, 0);
   const dayStart = Math.floor(startOfDay.getTime() / 1000);
   return db.prepare(
-    'SELECT m.*, ms.summary, ms.flagged_items FROM meetings m LEFT JOIN meeting_summaries ms ON m.id = ms.meeting_id WHERE m.start_time >= ? ORDER BY m.start_time ASC'
+    `SELECT m.*,
+      (SELECT summary FROM meeting_summaries WHERE meeting_id = m.id ORDER BY created_at DESC, id DESC LIMIT 1) as summary,
+      (SELECT flagged_items FROM meeting_summaries WHERE meeting_id = m.id ORDER BY created_at DESC, id DESC LIMIT 1) as flagged_items
+    FROM meetings m WHERE m.start_time >= ? ORDER BY m.start_time ASC`
   ).all(dayStart);
 }
 
@@ -952,12 +957,12 @@ function saveMeetingSummary(db, { meetingId, summary, topics, actionItems, decis
     openQuestions ? JSON.stringify(openQuestions) : null,
     keyPeople ? JSON.stringify(keyPeople) : null,
     flaggedItems ? JSON.stringify(flaggedItems) : null,
-    modelUsed || null, inputTokens || null, outputTokens || null);
+    modelUsed ?? null, inputTokens ?? null, outputTokens ?? null);
 }
 
 function getMeetingSummary(db, meetingId) {
   return db.prepare(
-    'SELECT * FROM meeting_summaries WHERE meeting_id = ? ORDER BY created_at DESC LIMIT 1'
+    'SELECT * FROM meeting_summaries WHERE meeting_id = ? ORDER BY created_at DESC, id DESC LIMIT 1'
   ).get(meetingId);
 }
 

@@ -1052,6 +1052,55 @@ const updatedMeeting = reticleDb.getMeeting(db, 'test-meeting-001');
 assert.strictEqual(updatedMeeting.review_status, 'reviewed');
 console.log('PASS: updateMeetingReviewStatus');
 
+// --- Test: createMeeting upsert updates title and attendeeEmails ---
+const upsertedMeeting = reticleDb.createMeeting(db, {
+  id: 'test-meeting-001',
+  title: 'Weekly Standup (Renamed)',
+  startTime: nowMeeting - 1800,
+  attendeeEmails: ['alex@co.com', 'mark@co.com', 'jane@co.com'],
+});
+assert.strictEqual(upsertedMeeting.title, 'Weekly Standup (Renamed)', 'Title should be updated on upsert');
+assert.deepStrictEqual(JSON.parse(upsertedMeeting.attendee_emails), ['alex@co.com', 'mark@co.com', 'jane@co.com'], 'attendee_emails should be updated on upsert');
+// Original fields should be preserved
+assert.strictEqual(upsertedMeeting.transcript_path, '/tmp/transcript.json', 'transcript_path should be preserved');
+assert.strictEqual(upsertedMeeting.capture_mode, 'tap', 'capture_mode should be preserved');
+console.log('PASS: createMeeting upsert updates title + attendeeEmails, preserves other fields');
+
+// --- Test: saveMeetingSummary twice, getMeetingSummary returns latest ---
+reticleDb.saveMeetingSummary(db, {
+  meetingId: 'test-meeting-001',
+  summary: 'Second summary — revised after corrections',
+  topics: ['goals', 'hiring', 'budget'],
+  actionItems: [],
+  decisions: [],
+  openQuestions: [],
+  keyPeople: [],
+  flaggedItems: [],
+  modelUsed: 'sonnet',
+  inputTokens: 3000,
+  outputTokens: 800
+});
+const latestSummary = reticleDb.getMeetingSummary(db, 'test-meeting-001');
+assert.strictEqual(latestSummary.summary, 'Second summary — revised after corrections', 'getMeetingSummary should return the latest summary');
+assert.strictEqual(latestSummary.model_used, 'sonnet', 'Latest summary should have the newer model');
+// Verify there are actually 2 summaries in the table
+const summaryCount = db.prepare('SELECT COUNT(*) as c FROM meeting_summaries WHERE meeting_id = ?').get('test-meeting-001').c;
+assert.strictEqual(summaryCount, 2, 'Both summaries should exist in the table');
+console.log('PASS: saveMeetingSummary twice, getMeetingSummary returns latest');
+
+// --- Test: listMeetings and getTodaysMeetings no duplicate rows with multiple summaries ---
+const listedMeetings = reticleDb.listMeetings(db);
+const testMeetingRows = listedMeetings.filter(m => m.id === 'test-meeting-001');
+assert.strictEqual(testMeetingRows.length, 1, 'listMeetings must not duplicate rows when multiple summaries exist');
+assert.strictEqual(testMeetingRows[0].summary, 'Second summary — revised after corrections', 'listMeetings should return the latest summary');
+console.log('PASS: listMeetings returns 1 row per meeting even with multiple summaries');
+
+const todayMeetings2 = reticleDb.getTodaysMeetings(db);
+const todayTestRows = todayMeetings2.filter(m => m.id === 'test-meeting-001');
+assert.strictEqual(todayTestRows.length, 1, 'getTodaysMeetings must not duplicate rows when multiple summaries exist');
+assert.strictEqual(todayTestRows[0].summary, 'Second summary — revised after corrections', 'getTodaysMeetings should return the latest summary');
+console.log('PASS: getTodaysMeetings returns 1 row per meeting even with multiple summaries');
+
 console.log('\n--- Meeting tables + CRUD tests passed ---');
 
 console.log('\n=== ALL RETICLE-DB TESTS PASSED ===');
