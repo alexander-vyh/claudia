@@ -26,9 +26,11 @@ const tables = db.prepare(
 ).all().map(r => r.name);
 assert.deepStrictEqual(tables, [
   'accounts', 'action_log', 'conversations', 'digest_snapshots', 'email_rules',
-  'emails', 'entity_links', 'feedback_candidates', 'feedback_settings', 'monitored_people', 'notification_log', 'o3_sessions', 'unsubscribes'
+  'emails', 'entity_links', 'feedback_candidates', 'feedback_settings',
+  'meeting_summaries', 'meetings', 'monitored_people', 'notification_log',
+  'o3_sessions', 'speaker_embeddings', 'transcription_corrections', 'unsubscribes'
 ]);
-console.log('PASS: all 13 tables created');
+console.log('PASS: all 18 tables created');
 
 // --- Test: upsertAccount + getAccount ---
 const acct = reticleDb.upsertAccount(db, {
@@ -981,5 +983,75 @@ assert.ok(!acctAItems.some(i => i.id === 'acctB-item'), 'Account A should not se
 console.log('PASS: snapshot account isolation');
 
 console.log('\n--- Digest snapshot tests passed ---');
+
+// --- Test: meeting tables exist ---
+const meetingTables = db.prepare(
+  "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('meetings', 'meeting_summaries', 'speaker_embeddings', 'transcription_corrections') ORDER BY name"
+).all().map(r => r.name);
+assert.deepStrictEqual(meetingTables, [
+  'meeting_summaries', 'meetings', 'speaker_embeddings', 'transcription_corrections'
+]);
+console.log('PASS: meeting tables created');
+
+// --- Test: createMeeting + getMeeting ---
+const nowMeeting = Math.floor(Date.now() / 1000);
+const meeting = reticleDb.createMeeting(db, {
+  id: 'test-meeting-001',
+  title: 'Weekly Standup',
+  startTime: nowMeeting - 1800,
+  endTime: nowMeeting,
+  durationSec: 1800,
+  attendeeEmails: ['alex@co.com', 'mark@co.com'],
+  captureMode: 'tap',
+  transcriptPath: '/tmp/transcript.json',
+  wavPath: '/tmp/meeting.wav'
+});
+assert.strictEqual(meeting.id, 'test-meeting-001');
+assert.strictEqual(meeting.title, 'Weekly Standup');
+assert.strictEqual(meeting.review_status, 'new');
+console.log('PASS: createMeeting');
+
+const fetchedMeeting = reticleDb.getMeeting(db, 'test-meeting-001');
+assert.strictEqual(fetchedMeeting.title, 'Weekly Standup');
+assert.deepStrictEqual(JSON.parse(fetchedMeeting.attendee_emails), ['alex@co.com', 'mark@co.com']);
+console.log('PASS: getMeeting');
+
+// --- Test: listMeetings ---
+const meetings = reticleDb.listMeetings(db);
+assert.ok(meetings.length >= 1);
+console.log('PASS: listMeetings');
+
+// --- Test: getTodaysMeetings ---
+const todayMeetings = reticleDb.getTodaysMeetings(db);
+assert.ok(todayMeetings.length >= 1);
+console.log('PASS: getTodaysMeetings');
+
+// --- Test: saveMeetingSummary + getMeetingSummary ---
+reticleDb.saveMeetingSummary(db, {
+  meetingId: 'test-meeting-001',
+  summary: 'Discussed Q3 goals',
+  topics: ['goals', 'hiring'],
+  actionItems: [{ owner: 'Mark', item: 'Draft job posting' }],
+  decisions: ['Hire 2 engineers'],
+  openQuestions: ['Budget approval?'],
+  keyPeople: [{ mentioned: 'Mark', context: 'hiring lead' }],
+  flaggedItems: [{ type: 'unresolved_speaker', label: 'SPEAKER_02', segmentCount: 4 }],
+  modelUsed: 'haiku',
+  inputTokens: 2000,
+  outputTokens: 500
+});
+const meetingSummary = reticleDb.getMeetingSummary(db, 'test-meeting-001');
+assert.strictEqual(meetingSummary.summary, 'Discussed Q3 goals');
+assert.deepStrictEqual(JSON.parse(meetingSummary.topics), ['goals', 'hiring']);
+assert.deepStrictEqual(JSON.parse(meetingSummary.flagged_items), [{ type: 'unresolved_speaker', label: 'SPEAKER_02', segmentCount: 4 }]);
+console.log('PASS: saveMeetingSummary + getMeetingSummary');
+
+// --- Test: updateMeetingReviewStatus ---
+reticleDb.updateMeetingReviewStatus(db, 'test-meeting-001', 'reviewed');
+const updatedMeeting = reticleDb.getMeeting(db, 'test-meeting-001');
+assert.strictEqual(updatedMeeting.review_status, 'reviewed');
+console.log('PASS: updateMeetingReviewStatus');
+
+console.log('\n--- Meeting tables + CRUD tests passed ---');
 
 console.log('\n=== ALL RETICLE-DB TESTS PASSED ===');

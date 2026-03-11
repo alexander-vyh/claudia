@@ -27,6 +27,8 @@ const ENTITY_TYPES = {
   person: 'person',
   team: 'team',
   vendor: 'vendor',
+  meeting: 'meeting',
+  meeting_summary: 'meeting_summary',
 };
 
 const RELATIONSHIPS = {
@@ -45,6 +47,8 @@ const RELATIONSHIPS = {
   part_of: 'part_of',
   relates_to: 'relates_to',
   blocks: 'blocks',
+  summarized_by: 'summarized_by',
+  spoke_in: 'spoke_in',
 };
 
 function generateId() {
@@ -278,6 +282,62 @@ function initDatabase() {
       value      TEXT NOT NULL,
       updated_at INTEGER DEFAULT (strftime('%s','now'))
     );
+
+    CREATE TABLE IF NOT EXISTS meetings (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      start_time INTEGER NOT NULL,
+      end_time INTEGER,
+      duration_sec REAL,
+      attendee_emails TEXT,
+      capture_mode TEXT,
+      review_status TEXT NOT NULL DEFAULT 'new',
+      transcript_path TEXT,
+      wav_path TEXT,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_meetings_start ON meetings(start_time);
+    CREATE INDEX IF NOT EXISTS idx_meetings_status ON meetings(review_status);
+
+    CREATE TABLE IF NOT EXISTS meeting_summaries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      meeting_id TEXT NOT NULL REFERENCES meetings(id),
+      summary TEXT NOT NULL,
+      topics TEXT,
+      action_items TEXT,
+      decisions TEXT,
+      open_questions TEXT,
+      key_people TEXT,
+      flagged_items TEXT,
+      model_used TEXT,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_msummary_meeting ON meeting_summaries(meeting_id);
+
+    CREATE TABLE IF NOT EXISTS speaker_embeddings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      person_id TEXT NOT NULL,
+      embedding BLOB NOT NULL,
+      source_meeting_id TEXT NOT NULL,
+      model_version TEXT NOT NULL,
+      quality_score REAL,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+      UNIQUE(person_id, source_meeting_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_speaker_person ON speaker_embeddings(person_id);
+
+    CREATE TABLE IF NOT EXISTS transcription_corrections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      heard TEXT NOT NULL,
+      correct TEXT NOT NULL,
+      person_id TEXT,
+      source_meeting_id TEXT,
+      usage_count INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_corrections_heard ON transcription_corrections(heard);
   `);
 
   // Seed feedback_settings defaults (idempotent)
@@ -838,6 +898,69 @@ function pruneOldSnapshots(db, accountId, maxAgeDays) {
   return result.changes;
 }
 
+// --- Meetings ---
+
+function createMeeting(db, { id, title, startTime, endTime, durationSec,
+    attendeeEmails, captureMode, transcriptPath, wavPath }) {
+  db.prepare(`INSERT INTO meetings (id, title, start_time, end_time, duration_sec,
+    attendee_emails, capture_mode, transcript_path, wav_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title = COALESCE(excluded.title, meetings.title),
+      end_time = COALESCE(excluded.end_time, meetings.end_time),
+      duration_sec = COALESCE(excluded.duration_sec, meetings.duration_sec),
+      transcript_path = COALESCE(excluded.transcript_path, meetings.transcript_path),
+      wav_path = COALESCE(excluded.wav_path, meetings.wav_path)`)
+  .run(id, title || null, startTime, endTime || null, durationSec || null,
+    attendeeEmails ? JSON.stringify(attendeeEmails) : null,
+    captureMode || null, transcriptPath || null, wavPath || null);
+  return db.prepare('SELECT * FROM meetings WHERE id = ?').get(id);
+}
+
+function getMeeting(db, id) {
+  return db.prepare('SELECT * FROM meetings WHERE id = ?').get(id);
+}
+
+function listMeetings(db, { limit = 50 } = {}) {
+  return db.prepare(
+    'SELECT m.*, ms.summary FROM meetings m LEFT JOIN meeting_summaries ms ON m.id = ms.meeting_id ORDER BY m.start_time DESC LIMIT ?'
+  ).all(limit);
+}
+
+function getTodaysMeetings(db) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const dayStart = Math.floor(startOfDay.getTime() / 1000);
+  return db.prepare(
+    'SELECT m.*, ms.summary, ms.flagged_items FROM meetings m LEFT JOIN meeting_summaries ms ON m.id = ms.meeting_id WHERE m.start_time >= ? ORDER BY m.start_time ASC'
+  ).all(dayStart);
+}
+
+function updateMeetingReviewStatus(db, meetingId, status) {
+  db.prepare('UPDATE meetings SET review_status = ? WHERE id = ?').run(status, meetingId);
+}
+
+function saveMeetingSummary(db, { meetingId, summary, topics, actionItems, decisions,
+    openQuestions, keyPeople, flaggedItems, modelUsed, inputTokens, outputTokens }) {
+  db.prepare(`INSERT INTO meeting_summaries (meeting_id, summary, topics, action_items,
+    decisions, open_questions, key_people, flagged_items, model_used, input_tokens, output_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  .run(meetingId, summary,
+    topics ? JSON.stringify(topics) : null,
+    actionItems ? JSON.stringify(actionItems) : null,
+    decisions ? JSON.stringify(decisions) : null,
+    openQuestions ? JSON.stringify(openQuestions) : null,
+    keyPeople ? JSON.stringify(keyPeople) : null,
+    flaggedItems ? JSON.stringify(flaggedItems) : null,
+    modelUsed || null, inputTokens || null, outputTokens || null);
+}
+
+function getMeetingSummary(db, meetingId) {
+  return db.prepare(
+    'SELECT * FROM meeting_summaries WHERE meeting_id = ? ORDER BY created_at DESC LIMIT 1'
+  ).get(meetingId);
+}
+
 module.exports = {
   DB_PATH,
   ENTITY_TYPES,
@@ -888,4 +1011,11 @@ module.exports = {
   getSnapshotHistory,
   getSnapshotsForRange,
   pruneOldSnapshots,
+  createMeeting,
+  getMeeting,
+  listMeetings,
+  getTodaysMeetings,
+  updateMeetingReviewStatus,
+  saveMeetingSummary,
+  getMeetingSummary,
 };
