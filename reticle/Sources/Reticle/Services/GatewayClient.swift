@@ -8,13 +8,20 @@ struct Person: Codable, Identifiable {
     let name: String?
     let slackId: String?
     let jiraId: String?
+    let role: String?           // "vip", "direct_report", "peer"
+    let escalationTier: String? // "immediate", "4h", "daily", "weekly" — null = role default
+    let title: String?          // VIP title
+    let team: String?           // Team affiliation
     let resolvedAt: Int?
+    let createdAt: Int?
 
     enum CodingKeys: String, CodingKey {
-        case id, email, name
+        case id, email, name, title, team, role
         case slackId = "slack_id"
         case jiraId = "jira_id"
+        case escalationTier = "escalation_tier"
         case resolvedAt = "resolved_at"
+        case createdAt = "created_at"
     }
 }
 
@@ -120,6 +127,12 @@ class GatewayClient: ObservableObject {
         struct Response: Decodable { let ok: Bool }
         let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email
         let _: Response = try await request("/people/\(encoded)", method: "DELETE")
+    }
+
+    func updatePerson(email: String, fields: [String: Any]) async throws {
+        struct Response: Decodable { let ok: Bool }
+        let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email
+        let _: Response = try await request("/people/\(encoded)", method: "PATCH", body: fields)
     }
 
     // MARK: - Feedback
