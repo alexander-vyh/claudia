@@ -43,10 +43,11 @@ const SOUNDS = {
 };
 
 const config = require('./lib/config');
+const peopleStore = require('./lib/people-store');
 
 const O3_CONFIG = {
   myEmail: config.gmailAccount,
-  directReports: config.directReports,
+  directReports: [],  // refreshed from DB each poll cycle via peopleStore.getDirectReports()
   afternoonPrepWindow: { startHour: 14, endHour: 15 },  // 2-3pm
   minGapMinutes: 10,
   maxPostDeferHours: 4,
@@ -286,6 +287,10 @@ async function sendPostMeetingNudge(db, event, report) {
  */
 async function checkO3Notifications(events, db, accountId) {
   if (!db) return;
+
+  // Refresh direct reports from DB each cycle so changes take effect without a restart
+  O3_CONFIG.directReports = peopleStore.getDirectReports(db);
+
   const now = Date.now();
 
   for (const event of events) {
