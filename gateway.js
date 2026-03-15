@@ -7,6 +7,7 @@ const peopleStore = require('./lib/people-store');
 const slackReader = require('./lib/slack-reader');
 const feedbackTracker = require('./lib/feedback-tracker');
 const kg = require('./lib/knowledge-graph');
+const { findCracks } = require('./lib/crack-finder');
 const config = require('./lib/config');
 
 const app = express();
@@ -512,6 +513,17 @@ app.get('/api/unattributed', (req, res) => {
       sourceMessageId: f.source_message_id,
     })),
   });
+});
+
+// GET /api/cracks — credibility gap analysis across entities
+app.get('/api/cracks', (req, res) => {
+  const omDb = getOrgMemDb();
+  const staleDays = parseInt(req.query.staleDays) || 7;
+  const monitoredOnly = req.query.monitoredOnly === 'true';
+  const topN = parseInt(req.query.topN) || 5;
+
+  const cracks = findCracks(omDb, { staleDays, monitoredOnly, topN });
+  res.json({ cracks });
 });
 
 // Health check
