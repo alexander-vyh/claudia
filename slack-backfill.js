@@ -126,9 +126,9 @@ async function getThreadRepliesAsUser(channelId, threadTs, oldest) {
 // Team channels — capture ALL messages, not just known team members.
 // These are the shared context channels where cross-team conversation matters.
 const TEAM_CHANNEL_PATTERNS = [
-  /^eng-platform/,          // eng-platform, eng-infra, eng-platform-desktop-support, etc.
+  /^eng-platform/,     // eng-platform, eng-infra, etc.
   /^eng-general$/,
-  /^hr-digitalworkplace$/,
+  /^hr-eng$/,
 ];
 
 function isTeamChannel(channelName) {
