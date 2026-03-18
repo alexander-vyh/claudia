@@ -18,3 +18,15 @@ if command -v gitleaks >/dev/null 2>&1; then
   fi
 fi
 # --- END GITLEAKS ---
+
+# --- BEGIN PII CHECK ---
+if command -v python3 >/dev/null 2>&1 && [ -f scripts/check_pii_patterns.py ]; then
+  STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+  if [ -n "$STAGED_FILES" ]; then
+    printf '%s\0' $STAGED_FILES | xargs -0 python3 scripts/check_pii_patterns.py
+    if [ $? -ne 0 ]; then
+      exit 1
+    fi
+  fi
+fi
+# --- END PII CHECK ---

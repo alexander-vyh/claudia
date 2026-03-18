@@ -50,7 +50,7 @@ const { collectJiraResolved } = require('./lib/jira-collector');
 
 // --- Fixture data ---
 
-function makeIssue({ key, summary, assigneeId, assigneeName, status = 'Done', issuetype = 'Story', project = 'DWDEV', components = [] }) {
+function makeIssue({ key, summary, assigneeId, assigneeName, status = 'Done', issuetype = 'Story', project = 'ENG', components = [] }) {
   return {
     key,
     fields: {
@@ -112,7 +112,7 @@ async function testCapabilityClassification() {
 async function testKtloClassification() {
   const db = makeMockDb(teamMembers);
   mockSearchIssues.fn = async () => [
-    makeIssue({ key: 'ENGSUP-16742', summary: 'Access Request: Bob needs Snowflake role', assigneeId: 'jira-bob', assigneeName: 'Bob', project: 'DWS' }),
+    makeIssue({ key: 'ENGSUP-16742', summary: 'Access Request: Bob needs Snowflake role', assigneeId: 'jira-bob', assigneeName: 'Bob', project: 'ENGSUP' }),
   ];
 
   const result = await collectJiraResolved(db, 'fake-token', weekStart, weekEnd);
@@ -126,7 +126,7 @@ async function testKtloClassification() {
 async function testKtloByIssueType() {
   const db = makeMockDb(teamMembers);
   mockSearchIssues.fn = async () => [
-    makeIssue({ key: 'ENGSUP-16800', summary: 'Something unrelated', assigneeId: 'jira-carol', assigneeName: 'Carol', issuetype: 'Service Request', project: 'DWS' }),
+    makeIssue({ key: 'ENGSUP-16800', summary: 'Something unrelated', assigneeId: 'jira-carol', assigneeName: 'Carol', issuetype: 'Service Request', project: 'ENGSUP' }),
   ];
 
   const result = await collectJiraResolved(db, 'fake-token', weekStart, weekEnd);
@@ -140,10 +140,10 @@ async function testMixedTickets() {
   const db = makeMockDb(teamMembers);
   mockSearchIssues.fn = async () => [
     makeIssue({ key: 'ENG-9407', summary: 'Terraform attribute mapping', assigneeId: 'jira-alice', assigneeName: 'Alice' }),
-    makeIssue({ key: 'ENGSUP-16742', summary: 'Access Request: Snowflake', assigneeId: 'jira-bob', assigneeName: 'Bob', project: 'DWS' }),
-    makeIssue({ key: 'ENGSUP-16750', summary: 'Onboarding: new hire setup', assigneeId: 'jira-carol', assigneeName: 'Carol', project: 'DWS' }),
+    makeIssue({ key: 'ENGSUP-16742', summary: 'Access Request: Snowflake', assigneeId: 'jira-bob', assigneeName: 'Bob', project: 'ENGSUP' }),
+    makeIssue({ key: 'ENGSUP-16750', summary: 'Onboarding: new hire setup', assigneeId: 'jira-carol', assigneeName: 'Carol', project: 'ENGSUP' }),
     makeIssue({ key: 'ENG-9410', summary: 'Implement SSO integration', assigneeId: 'jira-alice', assigneeName: 'Alice' }),
-    makeIssue({ key: 'ENGSUP-16760', summary: 'Password reset for user X', assigneeId: 'jira-bob', assigneeName: 'Bob', project: 'DWS' }),
+    makeIssue({ key: 'ENGSUP-16760', summary: 'Password reset for user X', assigneeId: 'jira-bob', assigneeName: 'Bob', project: 'ENGSUP' }),
   ];
 
   const result = await collectJiraResolved(db, 'fake-token', weekStart, weekEnd);
@@ -241,7 +241,7 @@ async function testKtloSummaryPatterns() {
 
   for (const summary of ktloSummaries) {
     mockSearchIssues.fn = async () => [
-      makeIssue({ key: 'ENGSUP-99', summary, assigneeId: 'jira-alice', assigneeName: 'Alice', project: 'DWS' }),
+      makeIssue({ key: 'ENGSUP-99', summary, assigneeId: 'jira-alice', assigneeName: 'Alice', project: 'ENGSUP' }),
     ];
 
     const result = await collectJiraResolved(db, 'fake-token', weekStart, weekEnd);
@@ -270,7 +270,7 @@ async function testCapabilitySummaryPatterns() {
 
   for (const summary of capSummaries) {
     mockSearchIssues.fn = async () => [
-      makeIssue({ key: 'ENGSUP-100', summary, assigneeId: 'jira-alice', assigneeName: 'Alice', project: 'DWS' }),
+      makeIssue({ key: 'ENGSUP-100', summary, assigneeId: 'jira-alice', assigneeName: 'Alice', project: 'ENGSUP' }),
     ];
 
     const result = await collectJiraResolved(db, 'fake-token', weekStart, weekEnd);
@@ -280,7 +280,7 @@ async function testCapabilitySummaryPatterns() {
   console.log('  PASS: capability summary patterns');
 }
 
-// Test 11: DWDEV project defaults to capability even with ambiguous summary
+// Test 11: ENG project defaults to capability even with ambiguous summary
 async function testDwdevDefaultsCapability() {
   const db = makeMockDb(teamMembers);
   mockSearchIssues.fn = async () => [
@@ -290,14 +290,14 @@ async function testDwdevDefaultsCapability() {
   const result = await collectJiraResolved(db, 'fake-token', weekStart, weekEnd);
   assert.strictEqual(result.tickets.length, 1);
   assert.strictEqual(result.tickets[0].category, 'capability');
-  console.log('  PASS: DWDEV defaults to capability');
+  console.log('  PASS: ENG defaults to capability');
 }
 
 // Test 12: Support issue type is KTLO
 async function testSupportIssueType() {
   const db = makeMockDb(teamMembers);
   mockSearchIssues.fn = async () => [
-    makeIssue({ key: 'ENGSUP-16900', summary: 'Help with data pipeline', assigneeId: 'jira-carol', assigneeName: 'Carol', issuetype: 'Support', project: 'DWS' }),
+    makeIssue({ key: 'ENGSUP-16900', summary: 'Help with data pipeline', assigneeId: 'jira-carol', assigneeName: 'Carol', issuetype: 'Support', project: 'ENGSUP' }),
   ];
 
   const result = await collectJiraResolved(db, 'fake-token', weekStart, weekEnd);

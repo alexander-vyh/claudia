@@ -7,8 +7,8 @@ const { buildActivityJql, parseIssueActivity, formatChangelogEntry } = require('
 
 // Test: basic project filter with sinceDays
 {
-  const jql = buildActivityJql({ projects: ['DWDEV', 'DWS'], sinceDays: 7 });
-  assert.ok(jql.includes('project in (DWDEV, DWS)'), 'should include project filter');
+  const jql = buildActivityJql({ projects: ['ENG', 'ENGSUP'], sinceDays: 7 });
+  assert.ok(jql.includes('project in (ENG, ENGSUP)'), 'should include project filter');
   assert.ok(jql.includes('updated >= -7d'), 'should include updated filter');
   assert.ok(jql.includes('ORDER BY updated DESC'), 'should order by updated desc');
   assert.ok(!jql.includes('assignee'), 'should not include assignee when no accountIds');
@@ -17,11 +17,11 @@ const { buildActivityJql, parseIssueActivity, formatChangelogEntry } = require('
 // Test: with accountIds
 {
   const jql = buildActivityJql({
-    projects: ['DWDEV', 'DWS'],
+    projects: ['ENG', 'ENGSUP'],
     accountIds: ['abc123', 'def456'],
     sinceDays: 7
   });
-  assert.ok(jql.includes('project in (DWDEV, DWS)'), 'should include project filter');
+  assert.ok(jql.includes('project in (ENG, ENGSUP)'), 'should include project filter');
   assert.ok(jql.includes('abc123'), 'should include first accountId');
   assert.ok(jql.includes('def456'), 'should include second accountId');
   assert.ok(jql.includes('assignee in'), 'should include assignee filter');
@@ -29,15 +29,15 @@ const { buildActivityJql, parseIssueActivity, formatChangelogEntry } = require('
 
 // Test: single project, no accountIds
 {
-  const jql = buildActivityJql({ projects: ['DWDEV'], sinceDays: 14 });
-  assert.ok(jql.includes('project in (DWDEV)'), 'should include single project');
+  const jql = buildActivityJql({ projects: ['ENG'], sinceDays: 14 });
+  assert.ok(jql.includes('project in (ENG)'), 'should include single project');
   assert.ok(jql.includes('updated >= -14d'), 'should use 14 day window');
   assert.ok(!jql.includes('assignee'), 'should not include assignee filter');
 }
 
 // Test: empty accountIds array treated as no filter
 {
-  const jql = buildActivityJql({ projects: ['DWDEV'], accountIds: [], sinceDays: 7 });
+  const jql = buildActivityJql({ projects: ['ENG'], accountIds: [], sinceDays: 7 });
   assert.ok(!jql.includes('assignee'), 'empty accountIds should not add assignee filter');
 }
 

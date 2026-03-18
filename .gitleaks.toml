@@ -5,9 +5,15 @@ useDefault = true
 # Project-specific rules
 [[rules]]
 id = "simpli-fi-email"
-description = "Company email domain"
+description = "Company email domain (catches any remaining pre-scrub references)"
 regex = '''@simpli\.fi'''
 keywords = ["example.com"]
+
+[[rules]]
+id = "simplifi-atlassian"
+description = "Atlassian domain (catches any remaining pre-scrub references)"
+regex = '''simplifi\.atlassian\.net'''
+keywords = ["company.atlassian.net"]
 
 [[rules]]
 id = "known-slack-user-ids"
@@ -15,6 +21,10 @@ description = "Known Slack user IDs (personal or direct reports)"
 regex = '''U03QTC30FAR|U08HWQZRCR4|U0412G376E9|U0A0UJ35KE2|ULPLLCRQF|U070SD8QX39|UJNCSLVTK'''
 
 [allowlist]
+# Jira-style ticket references (high entropy but not secrets)
+regexes = [
+  '''(?:ENG|ENGSUP)-\d+''',
+]
 # Example config files use placeholder tokens like xoxb-your-bot-token
 # Filter logic files necessarily reference company domain patterns
 paths = [

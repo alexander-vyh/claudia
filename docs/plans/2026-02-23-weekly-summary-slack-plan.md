@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Collect Slack messages from all channels/DMs weekly, summarize per-channel with Haiku, synthesize into a Digital Workplace weekly report draft with Sonnet, and deliver via Slack DM every Friday.
+**Goal:** Collect Slack messages from all channels/DMs weekly, summarize per-channel with Haiku, synthesize into an Engineering weekly report draft with Sonnet, and deliver via Slack DM every Friday.
 
 **Architecture:** Two-phase pipeline — a collector fetches and stores raw messages as JSON files, then a synthesizer runs two-tier AI (Haiku per-channel → Sonnet final) to produce the report draft. Both are launchd-scheduled services with CLI fallback.
 
@@ -720,7 +720,7 @@ function getClient() {
 }
 
 // --- Per-channel summarization prompt ---
-const CHANNEL_SUMMARY_PROMPT = `You are summarizing Slack messages for a Director of Digital Workplace and Security at an ad-tech company.
+const CHANNEL_SUMMARY_PROMPT = `You are summarizing Slack messages for a Director of Engineering and Security at an ad-tech company.
 
 Extract from the conversation:
 - Decisions made
@@ -736,7 +736,7 @@ If the conversation contains nothing notable or actionable, respond with exactly
 
 // --- Final synthesis prompt ---
 function buildSynthesisPrompt(teamStructure) {
-  return `You are writing a Digital Workplace weekly summary for a Director reporting to a VP of Infrastructure Operations at an ad-tech company (Simpli.fi).
+  return `You are writing an Engineering weekly summary for a Director reporting to a VP of Infrastructure Operations at an ad-tech company (the organization).
 
 Team structure:
 ${teamStructure}
@@ -751,7 +751,7 @@ Instructions:
 
 Output format (use this exact structure):
 
-Digital Workplace
+Engineering
 
 Executive Summary
 
@@ -761,10 +761,10 @@ Executive Summary
 
 Team Notes
 
-Corporate Systems Engineering
+Infrastructure
 [bullet points]
 
-Desktop Support
+Support
 [bullet points]
 
 Security
@@ -820,9 +820,9 @@ async function synthesizeReport(channelSummaries) {
   if (!anthropic) throw new Error('No AI credentials available');
 
   const teamStructure = [
-    'Corporate Systems Engineering (CSE): Gandalf Grey, Samwise Brown, Aragorn King',
+    'Infrastructure: Gandalf Grey, Samwise Brown, Aragorn King',
     '  - Focus: Identity/access management (Okta), automation, integrations, IaC',
-    'Desktop Support: Faramir Guard, Eowyn Rider',
+    'Support: Faramir Guard, Eowyn Rider',
     '  - Focus: Device management, employee support tickets, hardware lifecycle',
     'Security: Legolas Wood, Gimli Stone',
     '  - Focus: Endpoint security, macOS enrollment, security monitoring, incident response'
@@ -844,7 +844,7 @@ async function synthesizeReport(channelSummaries) {
     system: buildSynthesisPrompt(teamStructure),
     messages: [{
       role: 'user',
-      content: `Here are summaries from all active Slack channels this past week:\n\n${summaryText}\n\nPlease synthesize this into the Digital Workplace weekly summary.`
+      content: `Here are summaries from all active Slack channels this past week:\n\n${summaryText}\n\nPlease synthesize this into the Engineering weekly summary.`
     }]
   });
 
@@ -962,7 +962,7 @@ Expected: Creates `~/.claudia/data/weekly-summary/2026-02-23/summaries/` with pe
 **Step 3: Review the draft quality**
 
 Run: `cat ~/.claudia/data/weekly-summary/2026-02-23/draft.md`
-Expected: A draft in the Digital Workplace weekly summary format, grouped by team.
+Expected: A draft in the Engineering weekly summary format, grouped by team.
 
 **Step 4: Commit**
 
@@ -1091,7 +1091,7 @@ Check your Slack DMs for the draft message from Claudia.
 **Step 3: Verify draft quality**
 
 Review the draft against your actual weekly summary format. Check:
-- Correct team grouping (CSE, Desktop Support, Security)
+- Correct team grouping (Infrastructure, Support, Security)
 - Passive/impersonal voice
 - Business outcome focus
 - No hallucinated information

@@ -75,7 +75,7 @@ function seedPerson(db, { name, team, slackId, jiraId, messages }) {
       jiraId: 'jira-001',
       messages: [
         { source: 'slack', sourceId: 'ch1:1001', channelName: 'eng-infra', content: 'Finished UKG lifecycle automation validation', occurredAt: now - 3600 },
-        { source: 'jira', sourceId: 'ENG-1234:status:' + (now - 7200), channelName: 'DWDEV', content: '[ENG-1234] Implement Jamf IAM (In Progress) — status: To Do -> In Progress', threadId: 'ENG-1234', occurredAt: now - 7200 },
+        { source: 'jira', sourceId: 'ENG-1234:status:' + (now - 7200), channelName: 'ENG', content: '[ENG-1234] Implement Jamf IAM (In Progress) — status: To Do -> In Progress', threadId: 'ENG-1234', occurredAt: now - 7200 },
       ]
     });
 
@@ -211,7 +211,7 @@ function seedPerson(db, { name, team, slackId, jiraId, messages }) {
       team: 'Corporate Systems Engineering',
       messages: [
         { source: 'slack', sourceId: 'bs:1', channelName: 'eng-platform', content: 'Working on IaC prep', occurredAt: now - 600 },
-        { source: 'jira', sourceId: 'ENGSUP-567:status:' + (now - 1200), channelName: 'DWS', content: '[ENGSUP-567] Routine config issue (Done) — status: In Progress -> Done', threadId: 'ENGSUP-567', occurredAt: now - 1200 },
+        { source: 'jira', sourceId: 'ENGSUP-567:status:' + (now - 1200), channelName: 'ENGSUP', content: '[ENGSUP-567] Routine config issue (Done) — status: In Progress -> Done', threadId: 'ENGSUP-567', occurredAt: now - 1200 },
       ]
     });
 

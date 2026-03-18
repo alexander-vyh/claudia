@@ -88,7 +88,7 @@ function cleanup(dbPath) {
     const result = collectAndCapture(db, {
       searchIssuesFn: searchIssues,
       getIssueChangelogFn: getIssueChangelog,
-      projects: ['DWDEV', 'DWS'],
+      projects: ['ENG', 'ENGSUP'],
       accountIds: ['jira-001'],
       sinceDays: 1,
     });
@@ -154,7 +154,7 @@ function cleanup(dbPath) {
     collectAndCapture(db, {
       searchIssuesFn: async () => mockIssues,
       getIssueChangelogFn: async () => mockChangelog,
-      projects: ['DWDEV'],
+      projects: ['ENG'],
       accountIds: ['jira-999'],
       sinceDays: 1,
       dryRun: true,
@@ -226,7 +226,7 @@ function cleanup(dbPath) {
     collectAndCapture(db, {
       searchIssuesFn: async () => mockIssues,
       getIssueChangelogFn: async () => mockChangelog,
-      projects: ['DWDEV'],
+      projects: ['ENG'],
       accountIds: ['jira-001'],
       sinceDays: 1,
     }).then(({ captured }) => {

@@ -56,7 +56,7 @@ function cleanup(dbPath) {
       status: 'In Progress',
       assigneeAccountId: '5f1234abc',
       assigneeName: 'Jane Doe',
-      projectKey: 'DWDEV',
+      projectKey: 'ENG',
       updatedAt: 1709900000,
       changeType: 'status',
       changeDetail: 'To Do -> In Progress',
@@ -91,7 +91,7 @@ function cleanup(dbPath) {
       status: 'Done',
       assigneeAccountId: '5f1234abc',
       assigneeName: 'Jane Doe',
-      projectKey: 'DWDEV',
+      projectKey: 'ENG',
       updatedAt: 1709900100,
       changeType: 'resolution',
       changeDetail: 'Fixed',
@@ -116,7 +116,7 @@ function cleanup(dbPath) {
       status: 'Open',
       assigneeAccountId: 'unknown-id',
       assigneeName: 'Unknown Person',
-      projectKey: 'DWS',
+      projectKey: 'ENGSUP',
       updatedAt: 1709900200,
       changeType: 'created',
       changeDetail: null,
@@ -141,7 +141,7 @@ function cleanup(dbPath) {
       status: 'In Progress',
       assigneeAccountId: '5f1234abc',
       assigneeName: 'Jane Doe',
-      projectKey: 'DWDEV',
+      projectKey: 'ENG',
       updatedAt: 1709900000,
       changeType: 'status',
       changeDetail: 'To Do -> In Progress',
@@ -171,14 +171,14 @@ function cleanup(dbPath) {
       status: 'Open',
       assigneeAccountId: null,
       assigneeName: null,
-      projectKey: 'DWS',
+      projectKey: 'ENGSUP',
       updatedAt: 1709900300,
       changeType: 'created',
       changeDetail: null,
     });
 
-    assert.strictEqual(result.channel_id, 'DWS', 'channel_id should be projectKey');
-    assert.strictEqual(result.channel_name, 'DWS', 'channel_name should be projectKey');
+    assert.strictEqual(result.channel_id, 'ENGSUP', 'channel_id should be projectKey');
+    assert.strictEqual(result.channel_name, 'ENGSUP', 'channel_name should be projectKey');
     assert.strictEqual(result.author_name, null, 'null assignee should yield null author_name');
     console.log('PASS: channelId uses projectKey');
   } finally {
@@ -197,7 +197,7 @@ function cleanup(dbPath) {
       status: 'Open',
       assigneeAccountId: null,
       assigneeName: null,
-      projectKey: 'DWDEV',
+      projectKey: 'ENG',
       updatedAt: 1709900400,
       changeType: 'created',
       changeDetail: null,
