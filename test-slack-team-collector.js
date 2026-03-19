@@ -99,7 +99,7 @@ async function testTeamMemberFiltering() {
   mockSlackReader.reset();
   _resetChannelCache();
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' }
+    { id: 'C_ENG', name: 'iops-dw' }
   ];
   mockSlackReader._historyByChannel = {
     C_ENG: [
@@ -122,7 +122,7 @@ async function testTeamMemberFiltering() {
   // Check message shape
   const aliceMsg = result.messages.find(m => m.author === 'Alice Anderson');
   assert.strictEqual(aliceMsg.authorTeam, 'cse');
-  assert.strictEqual(aliceMsg.channel, 'eng-platform');
+  assert.strictEqual(aliceMsg.channel, 'iops-dw');
   assert.ok(aliceMsg.date.match(/^\d{4}-\d{2}-\d{2}$/), 'date should be YYYY-MM-DD');
   assert.ok(aliceMsg.content.includes('pipeline'), 'content should be message text');
 
@@ -136,7 +136,7 @@ async function testTrivialMessageFiltering() {
   mockSlackReader.reset();
   _resetChannelCache();
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' }
+    { id: 'C_ENG', name: 'iops-dw' }
   ];
   mockSlackReader._historyByChannel = {
     C_ENG: [
@@ -163,7 +163,7 @@ async function testBotMessageFiltering() {
   mockSlackReader.reset();
   _resetChannelCache();
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' }
+    { id: 'C_ENG', name: 'iops-dw' }
   ];
   mockSlackReader._historyByChannel = {
     C_ENG: [
@@ -187,7 +187,7 @@ async function testDateRangeFiltering() {
   mockSlackReader.reset();
   _resetChannelCache();
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' }
+    { id: 'C_ENG', name: 'iops-dw' }
   ];
 
   const twoWeeksAgo = now - (14 * 86400);
@@ -216,7 +216,7 @@ async function testMissingChannelHandling() {
   _resetChannelCache();
   // Only one channel exists, but the collector looks for 4
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' }
+    { id: 'C_ENG', name: 'iops-dw' }
   ];
   mockSlackReader._historyByChannel = {
     C_ENG: [
@@ -246,23 +246,23 @@ async function testMultipleChannels() {
   mockSlackReader.reset();
   _resetChannelCache();
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' },
-    { id: 'C_INF', name: 'eng-infra' },
-    { id: 'C_AUTO', name: 'project-automation' },
-    { id: 'C_GEN', name: 'eng-general' },
+    { id: 'C_DW', name: 'iops-dw' },
+    { id: 'C_CSE', name: 'iops-dw-cse' },
+    { id: 'C_TF', name: 'project-terraform' },
+    { id: 'C_GEN', name: 'digital-workplace' },
   ];
   mockSlackReader._historyByChannel = {
-    C_ENG: [
-      { type: 'message', user: 'U_ALICE', text: 'Message from Alice in the eng-platform channel here', ts: String(now - 5000) }
+    C_DW: [
+      { type: 'message', user: 'U_ALICE', text: 'Message from Alice in the iops-dw channel here', ts: String(now - 5000) }
     ],
-    C_INF: [
-      { type: 'message', user: 'U_BOB', text: 'Message from Bob in the eng-infra channel here', ts: String(now - 4000) }
+    C_CSE: [
+      { type: 'message', user: 'U_BOB', text: 'Message from Bob in the iops-dw-cse channel here', ts: String(now - 4000) }
     ],
-    C_AUTO: [
-      { type: 'message', user: 'U_CAROL', text: 'Message from Carol in project-automation channel', ts: String(now - 3000) }
+    C_TF: [
+      { type: 'message', user: 'U_CAROL', text: 'Message from Carol in project-terraform channel', ts: String(now - 3000) }
     ],
     C_GEN: [
-      { type: 'message', user: 'U_ALICE', text: 'Alice again in the eng-general channel now', ts: String(now - 2000) }
+      { type: 'message', user: 'U_ALICE', text: 'Alice again in the digital-workplace channel now', ts: String(now - 2000) }
     ],
   };
 
@@ -274,10 +274,10 @@ async function testMultipleChannels() {
   assert.strictEqual(result.messagesFound, 4);
 
   const channels = new Set(result.messages.map(m => m.channel));
-  assert.ok(channels.has('eng-platform'));
-  assert.ok(channels.has('eng-infra'));
-  assert.ok(channels.has('project-automation'));
-  assert.ok(channels.has('eng-general'));
+  assert.ok(channels.has('iops-dw'));
+  assert.ok(channels.has('iops-dw-cse'));
+  assert.ok(channels.has('project-terraform'));
+  assert.ok(channels.has('digital-workplace'));
 
   console.log('  PASS: multiple channels aggregated correctly');
 }
@@ -289,7 +289,7 @@ async function testEmptyResults() {
   mockSlackReader.reset();
   _resetChannelCache();
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' }
+    { id: 'C_ENG', name: 'iops-dw' }
   ];
   mockSlackReader._historyByChannel = {
     C_ENG: []
@@ -311,7 +311,7 @@ async function testAuthorTeamMapping() {
   mockSlackReader.reset();
   _resetChannelCache();
   mockSlackReader._channels = [
-    { id: 'C_ENG', name: 'eng-platform' }
+    { id: 'C_ENG', name: 'iops-dw' }
   ];
   mockSlackReader._historyByChannel = {
     C_ENG: [
