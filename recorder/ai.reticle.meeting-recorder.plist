@@ -23,15 +23,15 @@
 	<integer>30</integer>
 
 	<key>StandardOutPath</key>
-	<string>/Users/USERNAME/.reticle/logs/meeting-recorder.log</string>
+	<string>/Users/alexandervyhmeister/.reticle/logs/meeting-recorder.log</string>
 
 	<key>StandardErrorPath</key>
-	<string>/Users/USERNAME/.reticle/logs/meeting-recorder-error.log</string>
+	<string>/Users/alexandervyhmeister/.reticle/logs/meeting-recorder-error.log</string>
 
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>HOME</key>
-		<string>/Users/USERNAME</string>
+		<string>/Users/alexandervyhmeister</string>
 	</dict>
 </dict>
 </plist>

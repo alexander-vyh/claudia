@@ -51,6 +51,15 @@ alert-state.json
 # Plan files (contain sensitive data)
 PLAN.md
 
+# Local-only files with PII (not for public repo)
+spike-weekly-summary.js
+lib/seed-data.js
+test-seed-data.js
+
+# Private docs and PII analysis artifacts
+docs/private/
+docs/simpli-fi-*
+
 # Meeting recorder
 recorder/.build/
 recorder/scripts/.venv/

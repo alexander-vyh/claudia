@@ -7,7 +7,7 @@ useDefault = true
 id = "simpli-fi-email"
 description = "Company email domain"
 regex = '''@simpli\.fi'''
-keywords = ["example.com"]
+keywords = ["example.co"]
 
 [[rules]]
 id = "known-slack-user-ids"

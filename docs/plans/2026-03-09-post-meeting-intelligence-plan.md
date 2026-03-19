@@ -495,13 +495,13 @@ const prompt = buildMeetingSummaryPrompt({
     { start: 0, end: 5, text: 'Hello everyone', speaker: 'SPEAKER_00' },
     { start: 5, end: 12, text: 'Let us discuss the roadmap', speaker: 'SPEAKER_01' }
   ],
-  attendees: ['the primary user', 'Boromir Hall'],
+  attendees: ['Alexander Vyhmeister', 'Boromir Hall'],
   title: 'Weekly Standup',
   durationMin: 30
 });
 
 // Should contain attendee names for closed-set resolution
-assert.ok(prompt.userMessage.includes('the primary user'));
+assert.ok(prompt.userMessage.includes('Alexander Vyhmeister'));
 assert.ok(prompt.userMessage.includes('Boromir Hall'));
 // Should contain transcript lines
 assert.ok(prompt.userMessage.includes('[SPEAKER_00] Hello everyone'));

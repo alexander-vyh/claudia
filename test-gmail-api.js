@@ -218,7 +218,7 @@ async function runTests() {
     };
 
     const result = await gmailApi.createFilter(client, {
-      from: 'it@example.com',
+      from: 'it@example.co',
       addLabelIds: ['Label_123'],
       removeLabelIds: ['INBOX', 'UNREAD']
     });
@@ -226,7 +226,7 @@ async function runTests() {
     assert.strictEqual(result.id, 'filter1');
     assert.strictEqual(createCalls.length, 1);
     assert.strictEqual(createCalls[0].userId, 'me');
-    assert.strictEqual(createCalls[0].requestBody.criteria.from, 'it@example.com');
+    assert.strictEqual(createCalls[0].requestBody.criteria.from, 'it@example.co');
     assert.deepStrictEqual(createCalls[0].requestBody.action.addLabelIds, ['Label_123']);
     assert.deepStrictEqual(createCalls[0].requestBody.action.removeLabelIds, ['INBOX', 'UNREAD']);
   });
