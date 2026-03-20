@@ -2,11 +2,11 @@
 
 **Date:** 2026-02-23
 **Status:** Approved
-**Goal:** Automatically collect Slack messages across all channels/DMs weekly, summarize them with AI, and deliver a draft Digital Workplace weekly report to the user's Slack DMs every Friday.
+**Goal:** Automatically collect Slack messages across all channels/DMs weekly, summarize them with AI, and deliver a draft Engineering weekly report to the user's Slack DMs every Friday.
 
 ## Problem
 
-Writing the weekly Digital Workplace summary currently requires manually reviewing Slack conversations, Jira tickets, and other sources. The Slack review is the most time-consuming part — the user is a member of many channels and has DMs with multiple direct reports. Context is spread across dozens of conversations with no automated way to extract the signal.
+Writing the weekly Engineering summary currently requires manually reviewing Slack conversations, Jira tickets, and other sources. The Slack review is the most time-consuming part — the user is a member of many channels and has DMs with multiple direct reports. Context is spread across dozens of conversations with no automated way to extract the signal.
 
 Claudia already has Slack send and event-listening capabilities but cannot read message history.
 
@@ -67,7 +67,7 @@ Top-level service. Runs Fridays at 3:00 PM via launchd.
   channels/
     C01ABC-general.json
     C02DEF-dw-engineering.json
-    D03GHI-dm-kinski-wu.json
+    D03GHI-dm-morgan-chen.json
     ...
   metadata.json
 ```
@@ -110,7 +110,7 @@ Top-level service. Runs Fridays at 3:30 PM via launchd.
 - Reads all per-channel summaries
 - Reads `team.json` for team structure
 - Sends to Sonnet with:
-  - Team structure context (CSE, Desktop Support, Security members)
+  - Team structure context (Infrastructure, Support, Security members)
   - Output format template matching the existing weekly report style
   - Instruction: passive/impersonal voice, business outcomes, no ticket numbers
 - Writes final draft to `~/.claudia/data/weekly-summary/YYYY-MM-DD/draft.md`

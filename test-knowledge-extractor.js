@@ -628,7 +628,7 @@ function cleanup(dbPath) {
   try {
     const entity = kg.createEntity(db, { entityType: 'person', canonicalName: 'Gimli Stone' });
     kg.addIdentity(db, { entityId: entity.id, source: 'slack', externalId: 'U_DAN', displayName: 'Gimli Stone' });
-    kg.addIdentity(db, { entityId: entity.id, source: 'jira', externalId: 'dan-jira', displayName: 'Gimli Stone' });
+    kg.addIdentity(db, { entityId: entity.id, source: 'jira', externalId: 'dan-jira', displayName: 'G. Stone' });
 
     kg.seedAliases(db);
 
@@ -637,7 +637,7 @@ function cleanup(dbPath) {
 
     const aliasValues = aliases.map(a => a.alias);
     assert.ok(aliasValues.includes('Gimli Stone'), 'should include canonical_name / display_name');
-    assert.ok(aliasValues.includes('Gimli Stone'), 'should include display_name from jira');
+    assert.ok(aliasValues.includes('G. Stone'), 'should include display_name from jira');
 
     console.log('PASS: seedAliases populates from identity_map display_name');
   } finally {
@@ -828,7 +828,7 @@ function cleanup(dbPath) {
     kg.addIdentity(db, { entityId: entity.id, source: 'slack', externalId: 'U_DAN', displayName: 'Gimli Stone' });
     kg.addAlias(db, { entityId: entity.id, alias: 'Gimli Stone', aliasSource: 'canonical_name' });
 
-    // Insert a raw message from Daniel
+    // Insert a raw message from Gimli
     kg.insertRawMessage(db, {
       source: 'slack', sourceId: 'slack:msg1', channelName: 'general',
       authorExtId: 'U_DAN', authorName: 'Gimli Stone',
@@ -948,7 +948,7 @@ function cleanup(dbPath) {
 
     // Mentioned name has different case
     kg.upsertFact(db, {
-      entityId: null, mentionedName: 'ken dominiec',
+      entityId: null, mentionedName: 'eowyn rider',
       attribute: 'decided', value: 'approve the plan',
       factType: 'event',
     });
@@ -956,7 +956,7 @@ function cleanup(dbPath) {
     const { runSweep } = require('./knowledge-extractor');
     const metrics = runSweep(db);
 
-    const fact = db.prepare("SELECT entity_id FROM facts WHERE mentioned_name = 'ken dominiec'").get();
+    const fact = db.prepare("SELECT entity_id FROM facts WHERE mentioned_name = 'eowyn rider'").get();
     assert.strictEqual(fact.entity_id, entity.id, 'case-insensitive match should work');
     assert.strictEqual(metrics.sweepPathBMatched, 1);
 
@@ -1003,13 +1003,13 @@ function cleanup(dbPath) {
   try {
     // Set up entity with alias
     const entity = kg.createEntity(db, { entityType: 'person', canonicalName: 'Gandalf Grey' });
-    kg.addIdentity(db, { entityId: entity.id, source: 'slack', externalId: 'U_KINSKI', displayName: 'Gandalf Grey' });
+    kg.addIdentity(db, { entityId: entity.id, source: 'slack', externalId: 'U_MORGAN', displayName: 'Gandalf Grey' });
     kg.addAlias(db, { entityId: entity.id, alias: 'Gandalf Grey', aliasSource: 'canonical_name' });
 
     // Deferred fact with a known name — but alias match fails because
     // the mentioned_name is a variant not in the alias table
     kg.upsertFact(db, {
-      entityId: null, mentionedName: 'K. Wu',
+      entityId: null, mentionedName: 'M. Chen',
       attribute: 'committed_to', value: 'send the report',
       factType: 'event',
     });
@@ -1023,12 +1023,12 @@ function cleanup(dbPath) {
     const { runSweep } = require('./knowledge-extractor');
     const metrics = runSweep(db);
 
-    // "Gandalf Grey" should be attributed (Path B), "K. Wu" should not
+    // "Gandalf Grey" should be attributed (Path B), "G. Grey" should not
     assert.strictEqual(metrics.sweepPathBMatched, 1);
-    // "K. Wu" has no alias → stays unattributed, but it's NOT a "known name"
-    // (no alias exists for "K. Wu"), so knownNamesUnattributed = 0
+    // "M. Chen" has no alias → stays unattributed, but it's NOT a "known name"
+    // (no alias exists for "M. Chen"), so knownNamesUnattributed = 0
     assert.strictEqual(metrics.sweepKnownNamesUnattributed, 0,
-      'K. Wu is NOT a known alias, so should not count as known-unattributed');
+      'M. Chen is NOT a known alias, so should not count as known-unattributed');
 
     console.log('PASS: sweep observable failure signal counts correctly');
   } finally {

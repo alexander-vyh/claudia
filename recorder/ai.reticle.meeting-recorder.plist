@@ -22,6 +22,7 @@
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
 
+	<!-- Paths below are placeholders; bin/deploy generates the real plist with the current user's HOME -->
 	<key>StandardOutPath</key>
 	<string>/Users/alexandervyhmeister/.reticle/logs/meeting-recorder.log</string>
 

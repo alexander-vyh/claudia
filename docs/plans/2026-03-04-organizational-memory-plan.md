@@ -756,11 +756,11 @@ function testGetCurrentState() {
   const now = Math.floor(Date.now() / 1000);
 
   kg.addFact(db, { entityId: entity.id, attribute: 'role', value: 'EM', factType: 'state', validFrom: now });
-  kg.addFact(db, { entityId: entity.id, attribute: 'team', value: 'CSE', factType: 'state', validFrom: now });
+  kg.addFact(db, { entityId: entity.id, attribute: 'team', value: 'Infrastructure', factType: 'state', validFrom: now });
 
   const state = kg.getCurrentState(db, entity.id);
   assert.strictEqual(state.role, 'EM');
-  assert.strictEqual(state.team, 'CSE');
+  assert.strictEqual(state.team, 'Infrastructure');
   db.close();
   cleanup();
   console.log('  PASS: getCurrentState');
@@ -937,9 +937,9 @@ function testSeedCreatesTeams() {
 
   const teams = db.prepare("SELECT * FROM entities WHERE entity_type = 'team'").all();
   assert.strictEqual(teams.length, 3);
-  assert.ok(teams.find(t => t.canonical_name === 'Corporate Systems Engineering'));
-  assert.ok(teams.find(t => t.canonical_name === 'Desktop Support'));
-  assert.ok(teams.find(t => t.canonical_name === 'Security'));
+  assert.ok(teams.find(t => t.canonical_name === 'Infrastructure'));
+  assert.ok(teams.find(t => t.canonical_name === 'Support'));
+  assert.ok(teams.find(t => t.canonical_name === 'Platform'));
   db.close(); mainDb.close(); cleanup();
   console.log('  PASS: seed creates teams');
 }
@@ -960,13 +960,13 @@ function testSeedLinksPeopleToTeams() {
   const { db, mainDb } = freshDbs();
   seedData.seedAll(db, mainDb);
 
-  const kinski = db.prepare("SELECT id FROM entities WHERE canonical_name = 'Gandalf Grey'").get();
-  const cse = db.prepare("SELECT id FROM entities WHERE canonical_name = 'Corporate Systems Engineering'").get();
+  const gandalf = db.prepare("SELECT id FROM entities WHERE canonical_name = 'Gandalf Grey'").get();
+  const infra = db.prepare("SELECT id FROM entities WHERE canonical_name = 'Infrastructure'").get();
 
   const link = mainDb.prepare(
     "SELECT * FROM entity_links WHERE source_type = 'person' AND source_id = ? AND target_type = 'team' AND target_id = ? AND relationship = 'member_of'"
-  ).get(kinski.id, cse.id);
-  assert.ok(link, 'Kinski should be member_of CSE');
+  ).get(gandalf.id, infra.id);
+  assert.ok(link, 'Gandalf should be member_of Infrastructure');
   db.close(); mainDb.close(); cleanup();
   console.log('  PASS: seed links people to teams');
 }
@@ -988,8 +988,8 @@ function testSeedIsIdempotent() {
   seedData.seedAll(db, mainDb); // Run twice
 
   const people = db.prepare("SELECT * FROM entities WHERE entity_type = 'person'").all();
-  const kinski = people.filter(p => p.canonical_name === 'Gandalf Grey');
-  assert.strictEqual(kinski.length, 1, 'Should not duplicate Gandalf Grey');
+  const gandalf = people.filter(p => p.canonical_name === 'Gandalf Grey');
+  assert.strictEqual(gandalf.length, 1, 'Should not duplicate Gandalf Grey');
   db.close(); mainDb.close(); cleanup();
   console.log('  PASS: seed is idempotent');
 }
@@ -1033,7 +1033,7 @@ Expected: FAIL — `lib/seed-data.js` does not exist.
 
 Create `lib/seed-data.js` with:
 
-- `TEAMS` constant: `['Corporate Systems Engineering', 'Desktop Support', 'Security']`
+- `TEAMS` constant: `['Infrastructure', 'Support', 'Platform']`
 - `PEOPLE` constant: array of `{ name, team }` objects for the 7 team members
 - `VENDORS` constant: array of vendor names
 - `seedAll(db, mainDb)` function:
