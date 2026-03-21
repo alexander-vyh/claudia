@@ -11,5 +11,5 @@ fi
 # --- BEGIN REPO IDENTITY ---
 # Override git author for this repo (public repo uses GitHub identity, not work email)
 git config --local user.name "alexander-vyh"
-git config --local user.email "alexander-vyh@users.noreply.github.com"
+git config --local user.email "alexander@vyhmeister.us"
 # --- END REPO IDENTITY ---
