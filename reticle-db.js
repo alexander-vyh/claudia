@@ -542,6 +542,8 @@ function trackConversation(db, accountId, conversation) {
     )
     ON CONFLICT(id) DO UPDATE SET
       subject = COALESCE(@subject, conversations.subject),
+      from_name = COALESCE(@from_name, conversations.from_name),
+      channel_name = COALESCE(@channel_name, conversations.channel_name),
       last_activity = @last_activity,
       waiting_for = @waiting_for,
       updated_at = strftime('%s', 'now')
