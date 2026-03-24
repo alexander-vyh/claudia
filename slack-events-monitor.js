@@ -17,6 +17,7 @@ const log = require('./lib/logger')('slack-events');
 const orgMemoryDb = require('./lib/org-memory-db');
 const slackCapture = require('./lib/slack-capture');
 const slackReader = require('./lib/slack-reader');
+const { trackSlackConversation: _trackSlackConversation } = require('./lib/conversation-tracker');
 const { query: agentQuery } = require('@anthropic-ai/claude-agent-sdk');
 const { createReticleMcpServer } = require('./lib/reticle-mcp-server');
 
@@ -87,37 +88,7 @@ function sendMacOSNotification(title, message) {
 }
 
 function trackSlackConversation(db, event, direction) {
-  if (!db) { log.warn('trackSlackConversation skipped — DB connection unavailable'); return; }
-
-  try {
-    const now = Math.floor(Date.now() / 1000);
-    let conversationId, conversationType;
-
-    if (event.channel_type === 'im') {
-      conversationId = `slack:dm:${event.user}`;
-      conversationType = 'slack-dm';
-    } else {
-      conversationId = `slack:mention:${event.channel}-${event.ts}`;
-      conversationType = 'slack-mention';
-    }
-
-    const lastSender = direction === 'incoming' ? 'them' : 'me';
-    const waitingFor = direction === 'incoming' ? 'my-response' : 'their-response';
-
-    reticleDb.trackConversation(db, accountId, {
-      id: conversationId,
-      type: conversationType,
-      subject: event.text ? event.text.substring(0, 100) : null,
-      from_user: event.user,
-      from_name: event.username || event.user,
-      last_activity: Math.floor(parseFloat(event.ts)),
-      last_sender: lastSender,
-      waiting_for: waitingFor,
-      first_seen: now
-    });
-  } catch (error) {
-    log.error({ err: error }, 'Failed to track Slack conversation');
-  }
+  return _trackSlackConversation({ db, accountId, slackReader, reticleDb, log }, event, direction);
 }
 
 // ── Message Tracking ─────────────────────────────────────────────────
@@ -691,7 +662,7 @@ app.event('message', async ({ event, client }) => {
   if (CONFIG.botUserId && event.user === CONFIG.botUserId) {
     markResponded(event.channel, event.ts);
     if (followupsDbConn && event.channel_type === 'im') {
-      trackSlackConversation(followupsDbConn, event, 'outgoing');
+      await trackSlackConversation(followupsDbConn, event, 'outgoing');
     }
     return;
   }
@@ -714,13 +685,13 @@ app.event('message', async ({ event, client }) => {
   const isMyMessage = event.user === CONFIG.myUserId;
   if (!isMyMessage) {
     try {
-      trackSlackConversation(followupsDbConn, event, 'incoming');
+      await trackSlackConversation(followupsDbConn, event, 'incoming');
     } catch (err) {
       log.warn({ err, channel: event.channel, ts: event.ts, user: event.user }, 'Failed to track conversation — continuing');
     }
   } else if (followupsDbConn && event.channel_type === 'im') {
     try {
-      trackSlackConversation(followupsDbConn, event, 'outgoing');
+      await trackSlackConversation(followupsDbConn, event, 'outgoing');
     } catch (err) {
       log.warn({ err }, 'Failed to track outgoing conversation');
     }
@@ -774,7 +745,7 @@ app.event('app_mention', async ({ event, client }) => {
 
   // Track conversation
   try {
-    trackSlackConversation(followupsDbConn, event, 'incoming');
+    await trackSlackConversation(followupsDbConn, event, 'incoming');
   } catch (err) {
     log.warn({ err }, 'Failed to track mention conversation');
   }

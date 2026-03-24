@@ -629,6 +629,57 @@ const allPersonalConvs = db.prepare('SELECT COUNT(*) as c FROM conversations WHE
 assert.strictEqual(allPersonalConvs.c, 1, 'Upsert must not create duplicates');
 console.log('PASS: trackConversation upsert does not create duplicates');
 
+// --- Test: trackConversation upsert backfills from_name and channel_name ---
+// First insert with null names (simulates the bug where Slack IDs are stored without resolution)
+reticleDb.trackConversation(db, acct.id, {
+  id: 'name-backfill-test',
+  type: 'slack-mention',
+  subject: 'Test mention',
+  from_user: 'U12345',
+  from_name: null,
+  channel_id: 'C99999',
+  channel_name: null,
+  waiting_for: 'my-response',
+  last_activity: Math.floor(Date.now() / 1000)
+});
+const beforeBackfill = db.prepare('SELECT * FROM conversations WHERE id = ?').get('name-backfill-test');
+assert.strictEqual(beforeBackfill.from_name, null, 'from_name should be null initially');
+assert.strictEqual(beforeBackfill.channel_name, null, 'channel_name should be null initially');
+
+// Upsert with resolved names — should backfill
+reticleDb.trackConversation(db, acct.id, {
+  id: 'name-backfill-test',
+  type: 'slack-mention',
+  subject: 'Test mention',
+  from_user: 'U12345',
+  from_name: 'Jane Smith',
+  channel_id: 'C99999',
+  channel_name: 'engineering',
+  waiting_for: 'my-response',
+  last_activity: Math.floor(Date.now() / 1000) + 10
+});
+const afterBackfill = db.prepare('SELECT * FROM conversations WHERE id = ?').get('name-backfill-test');
+assert.strictEqual(afterBackfill.from_name, 'Jane Smith', 'from_name should be backfilled on upsert');
+assert.strictEqual(afterBackfill.channel_name, 'engineering', 'channel_name should be backfilled on upsert');
+console.log('PASS: trackConversation upsert backfills from_name and channel_name');
+
+// Verify COALESCE: upsert with null should NOT overwrite existing names
+reticleDb.trackConversation(db, acct.id, {
+  id: 'name-backfill-test',
+  type: 'slack-mention',
+  subject: 'Test mention',
+  from_user: 'U12345',
+  from_name: null,
+  channel_id: 'C99999',
+  channel_name: null,
+  waiting_for: 'my-response',
+  last_activity: Math.floor(Date.now() / 1000) + 20
+});
+const afterNullUpsert = db.prepare('SELECT * FROM conversations WHERE id = ?').get('name-backfill-test');
+assert.strictEqual(afterNullUpsert.from_name, 'Jane Smith', 'from_name should NOT be overwritten by null');
+assert.strictEqual(afterNullUpsert.channel_name, 'engineering', 'channel_name should NOT be overwritten by null');
+console.log('PASS: trackConversation upsert preserves existing names when new values are null');
+
 console.log('\n--- Conversation upsert tests passed ---');
 
 // --- Test: olderThan filter for getPendingResponses ---
