@@ -839,6 +839,113 @@ app.get('/api/digest/history', (req, res) => {
   });
 });
 
+// --- Meeting routes ---
+
+function buildFlaggedItems(result, segments) {
+  const flagged = [];
+  const speakerLabels = [...new Set(segments.map(s => s.speaker))];
+  const unresolvedSpeakers = speakerLabels.filter(s => s.startsWith('SPEAKER_'));
+  for (const label of unresolvedSpeakers) {
+    const count = segments.filter(s => s.speaker === label).length;
+    flagged.push({ type: 'unresolved_speaker', label, segmentCount: count });
+  }
+  if (result.keyPeople) {
+    for (const p of result.keyPeople) {
+      if (!p.resolvedName) {
+        flagged.push({ type: 'unresolved_person', mentioned: p.mentioned, context: p.context });
+      }
+    }
+  }
+  if (result.actionItems) {
+    for (const a of result.actionItems) {
+      if (a.confidence === 'inferred') {
+        flagged.push({ type: 'low_confidence_action', item: a.item, owner: a.owner });
+      }
+    }
+  }
+  return flagged;
+}
+
+async function sendMeetingSlack(meetingId, title, attendeeNames, durationMin, result, flagged) {
+  const lines = [];
+  lines.push(`*Meeting: ${title || 'Untitled'}* (${durationMin} min)`);
+  if (attendeeNames.length > 0) lines.push(`Participants: ${attendeeNames.join(', ')}`);
+  if (result.summary) { lines.push(''); lines.push(result.summary); }
+  if (result.actionItems && result.actionItems.length > 0) {
+    lines.push(''); lines.push('*Action Items:*');
+    for (const a of result.actionItems) {
+      const dl = a.deadline ? ` (by ${a.deadline})` : '';
+      lines.push(`  → ${a.owner}: ${a.item}${dl}`);
+    }
+  }
+  if (result.decisions && result.decisions.length > 0) {
+    lines.push(''); lines.push('*Decisions:*');
+    for (const d of result.decisions) lines.push(`  ✓ ${d}`);
+  }
+  if (flagged.length > 0) {
+    lines.push(''); lines.push(`⚠ ${flagged.length} item${flagged.length > 1 ? 's' : ''} need review`);
+  }
+  try { await slack.sendSlackDM(lines.join('\n')); }
+  catch (err) { log.error({ err }, 'Failed to send meeting Slack DM'); }
+}
+
+async function summarizeAndDeliver(meetingId, segments, attendeeNames, title, durationSec) {
+  const durationMin = Math.round((durationSec || 0) / 60);
+  const result = await ai.summarizeMeeting({ transcript: segments, attendees: attendeeNames, title: title || 'Untitled Meeting', durationMin });
+  if (!result) return;
+  const flagged = buildFlaggedItems(result, segments);
+  reticleDb.saveMeetingSummary(db, { meetingId, summary: result.summary, topics: result.topics, actionItems: result.actionItems, decisions: result.decisions, openQuestions: result.openQuestions, keyPeople: result.keyPeople, flaggedItems: flagged, modelUsed: result.modelUsed, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
+  if (flagged.length > 0) reticleDb.updateMeetingReviewStatus(db, meetingId, 'needs_review');
+  await sendMeetingSlack(meetingId, title, attendeeNames, durationMin, result, flagged);
+}
+
+app.post('/meetings/:id/transcript', async (req, res) => {
+  const meetingId = req.params.id;
+  const { title, startTime, endTime, durationSec, attendeeEmails, captureMode, transcriptPath, wavPath, segments } = req.body;
+  if (!segments || !Array.isArray(segments)) return res.status(400).json({ error: 'segments array required' });
+  reticleDb.createMeeting(db, { id: meetingId, title, startTime, endTime, durationSec, attendeeEmails, captureMode, transcriptPath, wavPath });
+  const attendeeNames = [];
+  if (attendeeEmails) {
+    for (const email of attendeeEmails) {
+      const person = db.prepare('SELECT name, email FROM monitored_people WHERE email = ?').get(email);
+      attendeeNames.push(person ? (person.name || person.email) : email);
+    }
+  }
+  summarizeAndDeliver(meetingId, segments, attendeeNames, title, durationSec).catch(err => { log.error({ err, meetingId }, 'Meeting summarization failed'); });
+  res.json({ ok: true, meetingId });
+});
+
+app.get('/meetings', (req, res) => { res.json({ meetings: reticleDb.listMeetings(db, { limit: parseInt(req.query.limit) || 50 }) }); });
+app.get('/meetings/today', (req, res) => { res.json({ meetings: reticleDb.getTodaysMeetings(db) }); });
+app.get('/meetings/:id', (req, res) => {
+  const meeting = reticleDb.getMeeting(db, req.params.id);
+  if (!meeting) return res.status(404).json({ error: 'not found' });
+  res.json({ meeting, summary: reticleDb.getMeetingSummary(db, req.params.id) });
+});
+
+app.post('/meetings/:id/speakers', (req, res) => {
+  const { speakerLabel, personId } = req.body;
+  if (!speakerLabel || !personId) return res.status(400).json({ error: 'speakerLabel and personId required' });
+  reticleDb.link(db, { sourceType: 'meeting', sourceId: req.params.id, targetType: 'person', targetId: personId, relationship: 'spoke_in', metadata: JSON.stringify({ speakerLabel }) });
+  res.json({ ok: true });
+});
+
+app.get('/speakers/embeddings', (req, res) => {
+  const embeddings = reticleDb.getAllActiveEmbeddings(db);
+  res.json({ embeddings: embeddings.map(e => ({ personId: e.person_id, name: e.name, email: e.email, embedding: e.embedding.toString('base64'), modelVersion: e.model_version })) });
+});
+
+app.get('/corrections/dictionary', (req, res) => { res.json({ corrections: reticleDb.getCorrections(db) }); });
+
+app.post('/meetings/:id/corrections', (req, res) => {
+  const { heard, correct, personId } = req.body;
+  if (!heard || !correct) return res.status(400).json({ error: 'heard and correct required' });
+  reticleDb.saveCorrection(db, { heard, correct, personId: personId ?? null, sourceMeetingId: req.params.id });
+  res.json({ ok: true });
+});
+
+module.exports.buildFlaggedItems = buildFlaggedItems;
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

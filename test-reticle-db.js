@@ -26,9 +26,11 @@ const tables = db.prepare(
 ).all().map(r => r.name);
 assert.deepStrictEqual(tables, [
   'accounts', 'action_log', 'conversations', 'digest_snapshots', 'email_rules',
-  'emails', 'entity_links', 'feedback_candidates', 'feedback_settings', 'monitored_people', 'notification_log', 'o3_sessions', 'unsubscribes'
+  'emails', 'entity_links', 'feedback_candidates', 'feedback_settings',
+  'meeting_summaries', 'meetings', 'monitored_people', 'notification_log',
+  'o3_sessions', 'speaker_embeddings', 'transcription_corrections', 'unsubscribes'
 ]);
-console.log('PASS: all 13 tables created');
+console.log('PASS: all 18 tables created');
 
 // --- Test: upsertAccount + getAccount ---
 const acct = reticleDb.upsertAccount(db, {
@@ -981,5 +983,176 @@ assert.ok(!acctAItems.some(i => i.id === 'acctB-item'), 'Account A should not se
 console.log('PASS: snapshot account isolation');
 
 console.log('\n--- Digest snapshot tests passed ---');
+
+// --- Test: meeting tables exist ---
+const meetingTables = db.prepare(
+  "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('meetings', 'meeting_summaries', 'speaker_embeddings', 'transcription_corrections') ORDER BY name"
+).all().map(r => r.name);
+assert.deepStrictEqual(meetingTables, [
+  'meeting_summaries', 'meetings', 'speaker_embeddings', 'transcription_corrections'
+]);
+console.log('PASS: meeting tables created');
+
+// --- Test: createMeeting + getMeeting ---
+const nowMeeting = Math.floor(Date.now() / 1000);
+const meeting = reticleDb.createMeeting(db, {
+  id: 'test-meeting-001',
+  title: 'Weekly Standup',
+  startTime: nowMeeting - 1800,
+  endTime: nowMeeting,
+  durationSec: 1800,
+  attendeeEmails: ['alex@co.com', 'mark@co.com'],
+  captureMode: 'tap',
+  transcriptPath: '/tmp/transcript.json',
+  wavPath: '/tmp/meeting.wav'
+});
+assert.strictEqual(meeting.id, 'test-meeting-001');
+assert.strictEqual(meeting.title, 'Weekly Standup');
+assert.strictEqual(meeting.review_status, 'new');
+console.log('PASS: createMeeting');
+
+const fetchedMeeting = reticleDb.getMeeting(db, 'test-meeting-001');
+assert.strictEqual(fetchedMeeting.title, 'Weekly Standup');
+assert.deepStrictEqual(JSON.parse(fetchedMeeting.attendee_emails), ['alex@co.com', 'mark@co.com']);
+console.log('PASS: getMeeting');
+
+// --- Test: listMeetings ---
+const meetings = reticleDb.listMeetings(db);
+assert.ok(meetings.length >= 1);
+console.log('PASS: listMeetings');
+
+// --- Test: getTodaysMeetings ---
+const todayMeetings = reticleDb.getTodaysMeetings(db);
+assert.ok(todayMeetings.length >= 1);
+console.log('PASS: getTodaysMeetings');
+
+// --- Test: saveMeetingSummary + getMeetingSummary ---
+reticleDb.saveMeetingSummary(db, {
+  meetingId: 'test-meeting-001',
+  summary: 'Discussed Q3 goals',
+  topics: ['goals', 'hiring'],
+  actionItems: [{ owner: 'Mark', item: 'Draft job posting' }],
+  decisions: ['Hire 2 engineers'],
+  openQuestions: ['Budget approval?'],
+  keyPeople: [{ mentioned: 'Mark', context: 'hiring lead' }],
+  flaggedItems: [{ type: 'unresolved_speaker', label: 'SPEAKER_02', segmentCount: 4 }],
+  modelUsed: 'haiku',
+  inputTokens: 2000,
+  outputTokens: 500
+});
+const meetingSummary = reticleDb.getMeetingSummary(db, 'test-meeting-001');
+assert.strictEqual(meetingSummary.summary, 'Discussed Q3 goals');
+assert.deepStrictEqual(JSON.parse(meetingSummary.topics), ['goals', 'hiring']);
+assert.deepStrictEqual(JSON.parse(meetingSummary.flagged_items), [{ type: 'unresolved_speaker', label: 'SPEAKER_02', segmentCount: 4 }]);
+console.log('PASS: saveMeetingSummary + getMeetingSummary');
+
+// --- Test: updateMeetingReviewStatus ---
+reticleDb.updateMeetingReviewStatus(db, 'test-meeting-001', 'reviewed');
+const updatedMeeting = reticleDb.getMeeting(db, 'test-meeting-001');
+assert.strictEqual(updatedMeeting.review_status, 'reviewed');
+console.log('PASS: updateMeetingReviewStatus');
+
+// --- Test: createMeeting upsert updates title and attendeeEmails ---
+const upsertedMeeting = reticleDb.createMeeting(db, {
+  id: 'test-meeting-001',
+  title: 'Weekly Standup (Renamed)',
+  startTime: nowMeeting - 1800,
+  attendeeEmails: ['alex@co.com', 'mark@co.com', 'jane@co.com'],
+});
+assert.strictEqual(upsertedMeeting.title, 'Weekly Standup (Renamed)', 'Title should be updated on upsert');
+assert.deepStrictEqual(JSON.parse(upsertedMeeting.attendee_emails), ['alex@co.com', 'mark@co.com', 'jane@co.com'], 'attendee_emails should be updated on upsert');
+// Original fields should be preserved
+assert.strictEqual(upsertedMeeting.transcript_path, '/tmp/transcript.json', 'transcript_path should be preserved');
+assert.strictEqual(upsertedMeeting.capture_mode, 'tap', 'capture_mode should be preserved');
+console.log('PASS: createMeeting upsert updates title + attendeeEmails, preserves other fields');
+
+// --- Test: saveMeetingSummary twice, getMeetingSummary returns latest ---
+reticleDb.saveMeetingSummary(db, {
+  meetingId: 'test-meeting-001',
+  summary: 'Second summary — revised after corrections',
+  topics: ['goals', 'hiring', 'budget'],
+  actionItems: [],
+  decisions: [],
+  openQuestions: [],
+  keyPeople: [],
+  flaggedItems: [],
+  modelUsed: 'sonnet',
+  inputTokens: 3000,
+  outputTokens: 800
+});
+const latestSummary = reticleDb.getMeetingSummary(db, 'test-meeting-001');
+assert.strictEqual(latestSummary.summary, 'Second summary — revised after corrections', 'getMeetingSummary should return the latest summary');
+assert.strictEqual(latestSummary.model_used, 'sonnet', 'Latest summary should have the newer model');
+// Verify there are actually 2 summaries in the table
+const summaryCount = db.prepare('SELECT COUNT(*) as c FROM meeting_summaries WHERE meeting_id = ?').get('test-meeting-001').c;
+assert.strictEqual(summaryCount, 2, 'Both summaries should exist in the table');
+console.log('PASS: saveMeetingSummary twice, getMeetingSummary returns latest');
+
+// --- Test: listMeetings and getTodaysMeetings no duplicate rows with multiple summaries ---
+const listedMeetings = reticleDb.listMeetings(db);
+const testMeetingRows = listedMeetings.filter(m => m.id === 'test-meeting-001');
+assert.strictEqual(testMeetingRows.length, 1, 'listMeetings must not duplicate rows when multiple summaries exist');
+assert.strictEqual(testMeetingRows[0].summary, 'Second summary — revised after corrections', 'listMeetings should return the latest summary');
+console.log('PASS: listMeetings returns 1 row per meeting even with multiple summaries');
+
+const todayMeetings2 = reticleDb.getTodaysMeetings(db);
+const todayTestRows = todayMeetings2.filter(m => m.id === 'test-meeting-001');
+assert.strictEqual(todayTestRows.length, 1, 'getTodaysMeetings must not duplicate rows when multiple summaries exist');
+assert.strictEqual(todayTestRows[0].summary, 'Second summary — revised after corrections', 'getTodaysMeetings should return the latest summary');
+console.log('PASS: getTodaysMeetings returns 1 row per meeting even with multiple summaries');
+
+console.log('\n--- Meeting tables + CRUD tests passed ---');
+
+// --- Speaker embeddings ---
+const embeddingBuffer = Buffer.alloc(192 * 4); // 192 floats × 4 bytes
+reticleDb.saveSpeakerEmbedding(db, {
+  personId: 'person-001',
+  embedding: embeddingBuffer,
+  sourceMeetingId: 'test-meeting-001',
+  modelVersion: 'ecapa-tdnn-v1',
+  qualityScore: 0.85
+});
+const embeddings = reticleDb.getSpeakerEmbeddings(db, 'person-001');
+assert.strictEqual(embeddings.length, 1);
+assert.strictEqual(embeddings[0].model_version, 'ecapa-tdnn-v1');
+assert.ok(Buffer.isBuffer(embeddings[0].embedding));
+console.log('PASS: saveSpeakerEmbedding + getSpeakerEmbeddings');
+
+const allEmb = reticleDb.getAllActiveEmbeddings(db);
+assert.ok(Array.isArray(allEmb));
+console.log('PASS: getAllActiveEmbeddings');
+
+// Upsert: same person+meeting — should update, not duplicate
+reticleDb.saveSpeakerEmbedding(db, {
+  personId: 'person-001',
+  embedding: embeddingBuffer,
+  sourceMeetingId: 'test-meeting-001',
+  modelVersion: 'ecapa-tdnn-v2',
+  qualityScore: 0.91
+});
+const afterUpsert = reticleDb.getSpeakerEmbeddings(db, 'person-001');
+assert.strictEqual(afterUpsert.length, 1, 'upsert should not duplicate');
+assert.strictEqual(afterUpsert[0].model_version, 'ecapa-tdnn-v2');
+console.log('PASS: saveSpeakerEmbedding upserts on same person+meeting');
+
+// --- Transcription corrections ---
+reticleDb.saveCorrection(db, {
+  heard: 'Kaczalka',
+  correct: 'Kaczorek',
+  personId: 'person-001',
+  sourceMeetingId: 'test-meeting-001'
+});
+const corrections = reticleDb.getCorrections(db);
+assert.strictEqual(corrections.length, 1);
+assert.strictEqual(corrections[0].heard, 'Kaczalka');
+assert.strictEqual(corrections[0].correct, 'Kaczorek');
+console.log('PASS: saveCorrection + getCorrections');
+
+reticleDb.incrementCorrectionUsage(db, corrections[0].id);
+const updated3 = reticleDb.getCorrections(db);
+assert.strictEqual(updated3[0].usage_count, 2);
+console.log('PASS: incrementCorrectionUsage');
+
+console.log('\n--- Speaker embedding + correction tests passed ---');
 
 console.log('\n=== ALL RETICLE-DB TESTS PASSED ===');
